@@ -1,0 +1,232 @@
+# Fleet Lambda — local stack.
+#   docker compose up -d                  -> infrastructure only (postgres, kafka, airflow)
+#   docker compose --profile app up -d    -> + producer, spark-streaming, api, expense-generator
+#   docker compose run --rm runner ...    -> tests / ad-hoc scripts (profile "tools")
+# All settings come from .env (copy .env.example; `make env`).
+name: fleet
+
+x-runtime-build: &runtime-build
+  context: .
+  dockerfile: docker/runtime/Dockerfile
+  args:
+    PYSPARK_VERSION: ${PYSPARK_VERSION:-3.5.4}
+    POSTGRES_JDBC_VERSION: ${POSTGRES_JDBC_VERSION:-42.7.13}
+    APP_UID: ${APP_UID:-1000}
+
+x-runtime: &runtime
+  image: fleet-runtime:latest
+  build: *runtime-build
+  env_file: .env
+  environment:
+    LANDING_DIR: /data/landing
+    SPARK_CHECKPOINT_DIR: /checkpoints
+  volumes:
+    - ./fleet:/app/fleet
+    - ./data/landing:/data/landing
+  mem_limit: 256m
+  restart: unless-stopped
+
+services:
+  # ---------------------------------------------------------------- infrastructure
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      AIRFLOW_DB: ${AIRFLOW_DB}
+      AIRFLOW_DB_USER: ${AIRFLOW_DB_USER}
+      AIRFLOW_DB_PASSWORD: ${AIRFLOW_DB_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      # alphabetical order: airflow DB first, then the application schema (into POSTGRES_DB)
+      - ./docker/postgres/000_create_airflow_db.sh:/docker-entrypoint-initdb.d/000_create_airflow_db.sh:ro
+      - ./sql/001_schema.sql:/docker-entrypoint-initdb.d/001_schema.sql:ro
+    ports:
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432"
+    healthcheck:
+      # TCP check: the temporary init-time server listens on the socket only,
+      # so this stays unhealthy until initialisation has finished.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    mem_limit: 256m
+    restart: unless-stopped
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    hostname: kafka
+    environment:
+      # single-node KRaft (combined broker + controller), no ZooKeeper
+      CLUSTER_ID: ${KAFKA_CLUSTER_ID:-MkU3OEVBNTcwNTJENDM2Qk}
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093,PLAINTEXT_HOST://0.0.0.0:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      # topics are created by the application (vehicle.telemetry, 3 partitions)
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_MIN_INSYNC_REPLICAS: 1
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_HEAP_OPTS: -Xms256m -Xmx512m
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    ports:
+      - "127.0.0.1:29092:29092"
+    healthcheck:
+      # small heap for the CLI JVM so the check fits next to the broker in mem_limit
+      test: ["CMD-SHELL", "KAFKA_HEAP_OPTS=-Xmx64m kafka-broker-api-versions --bootstrap-server localhost:9092 > /dev/null 2>&1"]
+      interval: 20s
+      timeout: 20s
+      retries: 10
+      start_period: 30s
+    mem_limit: 768m
+    restart: unless-stopped
+
+  airflow:
+    image: fleet-airflow:latest
+    build:
+      context: .
+      dockerfile: docker/airflow/Dockerfile
+      args:
+        PYSPARK_VERSION: ${PYSPARK_VERSION:-3.5.4}
+        POSTGRES_JDBC_VERSION: ${POSTGRES_JDBC_VERSION:-42.7.13}
+    user: "${APP_UID:-1000}:0"
+    env_file: .env
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${AIRFLOW_DB_USER}:${AIRFLOW_DB_PASSWORD}@postgres:5432/${AIRFLOW_DB}
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY:-}
+      AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_WEBSERVER_SECRET_KEY:?set AIRFLOW_WEBSERVER_SECRET_KEY in .env}
+      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "False"
+      AIRFLOW__WEBSERVER__WORKERS: 1
+      # no rolling gunicorn restarts (they briefly double webserver memory)
+      AIRFLOW__WEBSERVER__WORKER_REFRESH_BATCH_SIZE: 0
+      AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "False"
+      AIRFLOW__CORE__PARALLELISM: 4
+      AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG: 4
+      AIRFLOW__SCHEDULER__DAG_DIR_LIST_INTERVAL: 30
+      AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: "True"
+      LANDING_DIR: /data/landing
+      PYTHONPATH: /opt/project
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./fleet:/opt/project/fleet
+      - ./data/landing:/data/landing
+      - airflow-logs:/opt/airflow/logs
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - |
+          import json, sys, urllib.request
+          h = json.load(urllib.request.urlopen("http://localhost:8080/health", timeout=5))
+          sys.exit(0 if all(h[k]["status"] == "healthy" for k in ("metadatabase", "scheduler")) else 1)
+      interval: 20s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+    # webserver+scheduler idle at ~1 GiB; the headroom is for Spark batch tasks
+    # (local mode, driver JVM) that the batch DAG runs inside this container
+    mem_limit: 2g
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------- application (profile "app")
+  # The Python modules below are written by the Streaming / Batch / API agents.
+  producer:
+    <<: *runtime
+    profiles: ["app"]
+    command: ["python", "-m", "fleet.producer.main"]
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+  spark-streaming:
+    <<: *runtime
+    profiles: ["app"]
+    command:
+      - spark-submit
+      - --master
+      - local[2]
+      - --driver-memory
+      - 768m
+      - --conf
+      - spark.ui.enabled=false
+      - /app/fleet/streaming/job.py
+    volumes:
+      - ./fleet:/app/fleet
+      - spark-checkpoints:/checkpoints
+    mem_limit: 1280m
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
+  api:
+    <<: *runtime
+    profiles: ["app"]
+    command: ["uvicorn", "fleet.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen("http://localhost:8000/health", timeout=5)
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  expense-generator:
+    <<: *runtime
+    profiles: ["app"]
+    command: ["python", "-m", "fleet.batch.generator", "--follow"]
+    volumes:
+      - ./fleet:/app/fleet
+      - ./data/landing:/data/landing
+
+  # ---------------------------------------------------------------- tools (profile "tools")
+  runner:
+    <<: *runtime
+    profiles: ["tools"]
+    command: ["pytest"]
+    restart: "no"
+    mem_limit: 1280m
+    volumes:
+      - .:/app
+      - ./data/landing:/data/landing
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres-data:
+  kafka-data:
+  airflow-logs:
+  spark-checkpoints:
