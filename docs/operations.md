@@ -40,6 +40,7 @@ Containers read `.env` when they are created. After changing it, run `docker com
 
 | Service | URL |
 |---|---|
+| Dashboard (Streamlit) | http://localhost:8501 |
 | API and Swagger UI | http://localhost:8000/docs |
 | Airflow UI | http://localhost:8080 (login from `AIRFLOW_ADMIN_USER` / `AIRFLOW_ADMIN_PASSWORD`) |
 | PostgreSQL | `localhost:5432`, database `fleet` |
@@ -47,7 +48,8 @@ Containers read `.env` when they are created. After changing it, run `docker com
 
 ## Health and monitoring
 
-- **Container health:** run `make ps`. Postgres, kafka, airflow and api have health checks.
+- **Container health:** run `make ps`. Postgres, kafka, airflow, api and dashboard have health checks.
+- **Dashboard:** the Overview page shows API, database, Airflow scheduler and stream freshness in one row.
 - **API:** `curl localhost:8000/health` returns 200, or 503 if the database is unreachable.
 - **Logs:** every Python component writes one JSON object per line, with `ts`, `level`, `component`, `message` and context fields. For example, `docker compose logs spark-streaming | grep '"component"'`.
 - **Stream freshness:**

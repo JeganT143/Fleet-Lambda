@@ -198,3 +198,85 @@ class DailyReportResponse(BaseModel):
         description="Per-vehicle rows ordered by estimated_profit ascending (worst first)"
     )
     latest_pipeline_run: PipelineRun | None
+
+
+# ---------------------------------------------------------------------------- dashboard views
+class FleetWindowHistoryResponse(BaseModel):
+    """Recent fleet windows, oldest first (for time-series charts)."""
+
+    count: int
+    windows: list[FleetWindow]
+
+
+class VehicleState(BaseModel):
+    """Latest known event of one vehicle (for the fleet map / vehicle picker)."""
+
+    vehicle_id: str
+    driver_id: str
+    status: str
+    latitude: float
+    longitude: float
+    zone: str
+    speed: float
+    event_timestamp: datetime
+    ingestion_ts: datetime
+
+
+class VehicleStateListResponse(BaseModel):
+    count: int
+    status_counts: dict[str, int] = Field(description="Vehicles per latest status")
+    vehicles: list[VehicleState]
+
+
+class ReportDate(BaseModel):
+    business_date: date
+    vehicle_count: int
+    total_estimated_profit: float
+    status_counts: dict[str, int]
+
+
+class ReportDateListResponse(BaseModel):
+    count: int
+    reports: list[ReportDate] = Field(description="Newest business date first")
+
+
+class PipelineRunListResponse(BaseModel):
+    count: int
+    runs: list[PipelineRun] = Field(description="Newest run first")
+
+
+class RejectedEvent(BaseModel):
+    rejected_id: int
+    reason: str
+    kafka_partition: int
+    kafka_offset: int
+    ingestion_ts: datetime
+    raw_value_preview: str | None
+
+
+class PartitionStats(BaseModel):
+    kafka_partition: int
+    event_count: int
+    vehicle_count: int
+
+
+class BatchQualityStat(BaseModel):
+    pipeline_name: str
+    batch_ref: str
+    business_date: date | None
+    records_total: int
+    records_valid: int
+    records_rejected: int
+    rule_failures: dict[str, Any]
+    recorded_at: datetime
+
+
+class DataQualityResponse(BaseModel):
+    stream_records_total: int
+    stream_records_valid: int
+    stream_records_rejected: int
+    stream_rejection_rate: float = Field(description="rejected / total (0..1)")
+    rejected_by_reason: dict[str, int]
+    kafka_partitions: list[PartitionStats]
+    recent_rejected: list[RejectedEvent]
+    recent_batch_checks: list[BatchQualityStat]

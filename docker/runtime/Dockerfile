@@ -26,7 +26,7 @@ WORKDIR /app
 # is uninstalled again: code is used from /app via PYTHONPATH (bind-mounted in compose).
 COPY pyproject.toml README.md ./
 RUN mkdir fleet && touch fleet/__init__.py \
-    && pip install ".[producer,api,spark,dev]" "pyspark==${PYSPARK_VERSION}" \
+    && pip install ".[producer,api,spark,dev,dashboard]" "pyspark==${PYSPARK_VERSION}" \
     && pip uninstall -y fleet-lambda \
     && rm -rf fleet build ./*.egg-info \
     && pip show pyspark | grep -E '^(Name|Version):'

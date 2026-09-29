@@ -389,6 +389,18 @@ Do not fabricate performance results.
 
 ---
 
+# Phase 14 — Dashboard (added on request)
+
+- [x] Streamlit dashboard covering every feature (6 pages).
+- [x] Reads only the FastAPI serving layer (5 read-only endpoints added).
+- [x] Airflow REST API: DAG run states + idempotent re-run of a business date.
+- [x] Docker Compose service `dashboard` (port 8501) with health check.
+- [x] Unit tests (all pages render against the real API with a fake repository; clients; failure states).
+- [x] Live integration test (all pages against running services) and a live re-run check.
+- [x] Documentation updated.
+
+---
+
 # Final Acceptance Criteria
 
 The project must demonstrate:

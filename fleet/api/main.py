@@ -26,18 +26,28 @@ from fleet.api.repository import FleetRepository, get_repository
 from fleet.api.schemas import (
     Alert,
     AlertListResponse,
+    BatchQualityStat,
     DailyProfitabilityRow,
     DailyReportResponse,
     DailyReportSummary,
+    DataQualityResponse,
     ErrorResponse,
     FleetDayTotals,
     FleetSummaryResponse,
     FleetWindow,
+    FleetWindowHistoryResponse,
     FleetZonesResponse,
     HealthResponse,
+    PartitionStats,
     PipelineRun,
+    PipelineRunListResponse,
+    RejectedEvent,
+    ReportDate,
+    ReportDateListResponse,
     VehicleDetailResponse,
     VehicleLatestEvent,
+    VehicleState,
+    VehicleStateListResponse,
     VehicleStreamStats,
     ZoneMetrics,
 )
@@ -46,7 +56,10 @@ from fleet.common.contracts import (
     ALERT_NO_DATA,
     ALERT_STATUSES,
     ALERT_VEHICLE_IDLE,
+    PROFITABLE,
+    UNPROFITABLE,
     VEHICLE_ID_PATTERN,
+    WATCH,
 )
 from fleet.common.logs import get_logger
 
@@ -72,6 +85,7 @@ TAGS = [
     {"name": "vehicles", "description": "Per-vehicle view combining speed and batch layers."},
     {"name": "alerts", "description": "Threshold alerts raised by the pipelines."},
     {"name": "reports", "description": "Daily reconciliation (batch layer) reports."},
+    {"name": "operations", "description": "Pipeline runs and data-quality statistics."},
 ]
 
 ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
@@ -177,6 +191,16 @@ def _per_hour(count: int, hours: float) -> float:
     return round(count / hours, 2) if hours > 0 else 0.0
 
 
+def _fleet_window(row: dict[str, Any]) -> FleetWindow:
+    hours = (row["window_end"] - row["window_start"]).total_seconds() / 3600
+    return FleetWindow(
+        **row,
+        window_hours=hours,
+        events_per_hour=_per_hour(row["event_count"], hours),
+        trips_per_hour=_per_hour(row["trips_completed"], hours),
+    )
+
+
 # ============================================================================ endpoints
 @app.get(
     "/health",
@@ -230,21 +254,29 @@ def fleet_summary(repo: RepoDep) -> FleetSummaryResponse:
             last_event_timestamp=ingestion["last_event_timestamp"],
             open_alerts=open_alerts,
         )
-    hours = (window["window_end"] - window["window_start"]).total_seconds() / 3600
     totals = repo.fleet_day_totals(window["business_date"])
     return FleetSummaryResponse(
         data_available=True,
-        latest_window=FleetWindow(
-            **window,
-            window_hours=hours,
-            events_per_hour=_per_hour(window["event_count"], hours),
-            trips_per_hour=_per_hour(window["trips_completed"], hours),
-        ),
+        latest_window=_fleet_window(window),
         business_day_totals=FleetDayTotals(business_date=window["business_date"], **totals),
         last_ingestion_ts=ingestion["last_ingestion_ts"],
         last_event_timestamp=ingestion["last_event_timestamp"],
         open_alerts=open_alerts,
     )
+
+
+@app.get(
+    "/api/v1/fleet/windows",
+    tags=["fleet"],
+    summary="Recent real-time fleet windows, oldest first (for charts)",
+    response_model=FleetWindowHistoryResponse,
+    responses=ERROR_RESPONSES,
+)
+def fleet_windows(
+    repo: RepoDep, limit: Annotated[int, Query(ge=1, le=500)] = 48
+) -> FleetWindowHistoryResponse:
+    rows = list(reversed(repo.fleet_windows(limit)))
+    return FleetWindowHistoryResponse(count=len(rows), windows=[_fleet_window(r) for r in rows])
 
 
 @app.get(
@@ -266,6 +298,21 @@ def fleet_zones(
     day = business_date or repo.latest_zone_business_date()
     zones = [ZoneMetrics(**r) for r in repo.zone_metrics(day)] if day else []
     return FleetZonesResponse(business_date=day, zone_count=len(zones), zones=zones)
+
+
+@app.get(
+    "/api/v1/vehicles",
+    tags=["vehicles"],
+    summary="Latest position and status of every vehicle",
+    response_model=VehicleStateListResponse,
+    responses={503: ERROR_RESPONSES[503]},
+)
+def vehicle_states(repo: RepoDep) -> VehicleStateListResponse:
+    vehicles = [VehicleState(**r) for r in repo.vehicle_states()]
+    counts: dict[str, int] = {}
+    for v in vehicles:
+        counts[v.status] = counts.get(v.status, 0) + 1
+    return VehicleStateListResponse(count=len(vehicles), status_counts=counts, vehicles=vehicles)
 
 
 @app.get(
@@ -322,6 +369,26 @@ def list_alerts(
 
 
 @app.get(
+    "/api/v1/reports/daily",
+    tags=["reports"],
+    summary="Business dates that have a daily report, newest first",
+    response_model=ReportDateListResponse,
+    responses={503: ERROR_RESPONSES[503]},
+)
+def report_dates(repo: RepoDep) -> ReportDateListResponse:
+    reports = [
+        ReportDate(
+            business_date=r["business_date"],
+            vehicle_count=r["vehicle_count"],
+            total_estimated_profit=r["total_estimated_profit"],
+            status_counts={s: int(r[s]) for s in (PROFITABLE, WATCH, UNPROFITABLE)},
+        )
+        for r in repo.report_dates()
+    ]
+    return ReportDateListResponse(count=len(reports), reports=reports)
+
+
+@app.get(
     "/api/v1/reports/daily/{business_date}",
     tags=["reports"],
     summary="Daily profitability report for one business date",
@@ -347,4 +414,41 @@ def daily_report(
         ),
         vehicles=[DailyProfitabilityRow(**r) for r in repo.daily_report_rows(business_date)],
         latest_pipeline_run=PipelineRun(**run) if run else None,
+    )
+
+
+@app.get(
+    "/api/v1/pipeline/runs",
+    tags=["operations"],
+    summary="Recent batch pipeline runs (pipeline_runs), newest first",
+    response_model=PipelineRunListResponse,
+    responses=ERROR_RESPONSES,
+)
+def pipeline_runs(
+    repo: RepoDep, limit: Annotated[int, Query(ge=1, le=500)] = 30
+) -> PipelineRunListResponse:
+    runs = [PipelineRun(**r) for r in repo.pipeline_runs(limit)]
+    return PipelineRunListResponse(count=len(runs), runs=runs)
+
+
+@app.get(
+    "/api/v1/data-quality",
+    tags=["operations"],
+    summary="Stream validation totals, quarantine reasons, Kafka partitions, batch checks",
+    response_model=DataQualityResponse,
+    responses={503: ERROR_RESPONSES[503]},
+)
+def data_quality(repo: RepoDep) -> DataQualityResponse:
+    totals = repo.stream_quality_totals()
+    total = int(totals["records_total"])
+    rejected = int(totals["records_rejected"])
+    return DataQualityResponse(
+        stream_records_total=total,
+        stream_records_valid=int(totals["records_valid"]),
+        stream_records_rejected=rejected,
+        stream_rejection_rate=round(rejected / total, 5) if total else 0.0,
+        rejected_by_reason=repo.rejected_by_reason(),
+        kafka_partitions=[PartitionStats(**r) for r in repo.partition_stats()],
+        recent_rejected=[RejectedEvent(**r) for r in repo.recent_rejected(10)],
+        recent_batch_checks=[BatchQualityStat(**r) for r in repo.recent_batch_quality(10)],
     )

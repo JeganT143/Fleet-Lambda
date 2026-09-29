@@ -82,6 +82,14 @@ class Settings:
     # minutes are not counted as driving when estimating stream_distance_km
     stream_distance_max_gap_minutes: float = 30.0
 
+    # Dashboard (Streamlit): internal URLs it calls, public URLs it links to
+    api_base_url: str = "http://api:8000"
+    api_public_url: str = "http://localhost:8000"
+    airflow_base_url: str = "http://airflow:8080"
+    airflow_public_url: str = "http://localhost:8080"
+    airflow_admin_user: str = "admin"
+    airflow_admin_password: str = ""
+
     @property
     def postgres_dsn(self) -> str:
         """libpq connection string for psycopg."""
@@ -137,4 +145,10 @@ def load_settings() -> Settings:
         stream_shuffle_partitions=_int("STREAM_SHUFFLE_PARTITIONS", 2),
         expense_poll_seconds=_float("EXPENSE_POLL_SECONDS", 30.0),
         stream_distance_max_gap_minutes=_float("STREAM_DISTANCE_MAX_GAP_MINUTES", 30.0),
+        api_base_url=_env("API_BASE_URL", "http://api:8000"),
+        api_public_url=_env("API_PUBLIC_URL", "http://localhost:8000"),
+        airflow_base_url=_env("AIRFLOW_BASE_URL", "http://airflow:8080"),
+        airflow_public_url=_env("AIRFLOW_PUBLIC_URL", "http://localhost:8080"),
+        airflow_admin_user=_env("AIRFLOW_ADMIN_USER", "admin"),
+        airflow_admin_password=_env("AIRFLOW_ADMIN_PASSWORD", ""),
     )

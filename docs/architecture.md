@@ -56,6 +56,9 @@ flowchart LR
     SB --> PR
     SS --> PR
     SE & RT & DP & AL --> API
+    UI["Streamlit dashboard"]
+    API --> UI
+    UI -.->|re-run a date| A
 ```
 
 | Layer | Path | Latency | Output |
@@ -96,6 +99,7 @@ daily per-vehicle reconciliation) and share validation rules and constants throu
 | Orchestration | **Apache Airflow** | File sensor, retries, run history and task logs in a UI |
 | Storage / serving | **PostgreSQL** | Constraints for idempotent upserts, SQL for the API, one small container |
 | API | **FastAPI** + Pydantic | Typed response models, automatic OpenAPI docs |
+| Dashboard | **Streamlit** | A multi-page data UI in plain Python, no front-end build |
 | Packaging | **Docker Compose** | Whole system reproducible with one command |
 | Quality | **pytest**, **Ruff** | Tests and lint/format |
 
@@ -169,6 +173,7 @@ fleet/streaming/  Spark Structured Streaming job + transforms + event validation
 fleet/batch/      expense generator, validation, Spark batch job, reconciliation
 fleet/alerts/     alert rules + evaluator
 fleet/api/        FastAPI app, Pydantic schemas, repository (SQL)
+fleet/dashboard/  Streamlit dashboard: API client, Airflow REST client, pages
 airflow/dags/     fleet_daily_batch, fleet_stream_alerts
 sql/              database schema (runs on first PostgreSQL start)
 docker/           Dockerfiles

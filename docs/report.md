@@ -131,11 +131,23 @@ FastAPI (`fleet/api/`) is read-only over the serving tables and holds no busines
 | `GET /api/v1/vehicles/{id}` | Latest position and status, today's stats, last 7 daily rows, open alerts |
 | `GET /api/v1/alerts` | Filtered by status, type and vehicle, with a limit |
 | `GET /api/v1/reports/daily/{date}` | Daily profitability report with a summary and per-vehicle rows |
+| `GET /api/v1/reports/daily` | Business dates that have a report, with status counts |
+| `GET /api/v1/fleet/windows` | Recent fleet windows for charts |
+| `GET /api/v1/vehicles` | Latest position and status of every vehicle |
+| `GET /api/v1/pipeline/runs` | Recent batch job runs |
+| `GET /api/v1/data-quality` | Stream validation totals, quarantine reasons, Kafka partitions, batch checks |
 
 It uses Pydantic response models and a repository class with parameterised SQL. Status codes:
 422 for invalid input (vehicle id pattern, date, filter values), 404 for unknown resources and
 503 when the database is down. Every request logs one JSON line with latency and a request id,
 which is echoed in `X-Request-ID`.
+
+**Dashboard.** A Streamlit app (`fleet/dashboard/`, http://localhost:8501) presents every
+feature on six pages: Overview (health and architecture), Live Fleet (windows, map, zones,
+auto-refresh), Vehicles, Daily Report (profitability and reconciliation), Alerts, and
+Pipeline & Quality. It reads only the API. For orchestration it calls the Airflow REST API,
+to list DAG runs and to re-run a business date as a live idempotency demo, so it holds no
+business logic and never touches the database directly.
 
 ## 12. Observability
 - Structured JSON logs from the producer (sent/failed stats), the Spark job (per micro-batch: query, batch id, rows, rejected, duration), the batch jobs, the alert checks and the API (latency).
@@ -175,7 +187,7 @@ which is echoed in `X-Request-ID`.
 - Alerts are de-duplicated by `dedup_key`.
 
 ## 16. Testing
-205 tests run in the `runner` container. The last full run passed with none skipped.
+242 tests run in the `runner` container. The last full run passed with none skipped.
 
 - **Unit tests:**
   - simulator lifecycle and determinism
@@ -187,12 +199,14 @@ which is echoed in `X-Request-ID`.
   - profitability thresholds (Python vs Spark, including exact boundaries)
   - alert rules
   - API endpoints with a fake repository
+  - dashboard pages rendered with Streamlit AppTest against the real API (fake repository), plus the HTTP clients
 - **Integration tests:**
   - Kafka producer/consumer on a throw-away 3-partition topic
   - Spark writers → PostgreSQL, re-run without duplicates
   - batch load and reconcile → PostgreSQL, idempotent re-run and invalid file
   - alert deduplication
   - API → PostgreSQL with exact values
+  - dashboard pages rendered against the live API and Airflow
 - **Deterministic fixtures:** seeded generators, and reserved test ids (V9xx) and dates (2099). Tests delete only their own rows.
 
 ## 17. Simulated time

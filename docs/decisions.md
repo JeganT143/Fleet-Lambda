@@ -152,3 +152,18 @@ minutes, because 120 raised an alert for most vehicles every night.
 
 **Consequences.** Changing the precision changes the Spark state schema, so the metrics
 checkpoints had to be reset. Metrics were recomputed from Kafka and no events were lost.
+
+---
+
+## ADR-012 — Streamlit dashboard on top of the API
+
+**Context.** The project needs a simple UI that demonstrates every feature clearly.
+
+**Decision.** A Streamlit app (`fleet/dashboard/`) that talks only to the FastAPI serving
+layer, plus the Airflow REST API (basic auth with the admin user) for DAG run states and
+re-running a date. Five read-only endpoints were added to the API for the dashboard's
+charts and operations views. The dashboard adds no business logic.
+
+**Consequences.** One more container (≈ 384 MB limit). The UI stays a thin presentation
+layer: if it were replaced, nothing else would change. Airflow's REST API now accepts basic
+auth, which is acceptable for a local demo; production would use a service account and TLS.

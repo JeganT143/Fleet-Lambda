@@ -18,11 +18,12 @@ One simulated business day lasts **5 real minutes**.
 make env        # create .env from .env.example, then change the passwords
 make build      # build the images (first time: several minutes)
 make up         # postgres, kafka, airflow (waits until healthy)
-make up-app     # producer, spark-streaming, api, expense-generator
+make up-app     # producer, spark-streaming, api, expense-generator, dashboard
 ```
 
 | What | Where |
 |---|---|
+| **Dashboard (start here)** | http://localhost:8501 |
 | API docs | http://localhost:8000/docs |
 | Airflow | http://localhost:8080 |
 | SQL shell | `make psql` |
@@ -46,6 +47,7 @@ fleet/streaming/  Spark Structured Streaming job (validation, enrichment, window
 fleet/batch/      expense generator, file validation, Spark batch jobs, reconciliation
 fleet/alerts/     alert rules and evaluator
 fleet/api/        FastAPI app, Pydantic schemas, repository
+fleet/dashboard/  Streamlit dashboard (reads the API, triggers Airflow re-runs)
 airflow/dags/     fleet_daily_batch, fleet_stream_alerts
 sql/              database schema
 docker/           Dockerfiles, smoke test
@@ -67,4 +69,4 @@ docs/             documentation (below)
 
 ## Stack
 Python 3.11 · Apache Kafka 3.6 (Confluent 7.6 image, KRaft) · Apache Spark 3.5.4 (Structured Streaming + batch) ·
-Apache Airflow 2.10.5 · PostgreSQL 16 · FastAPI · Docker Compose · pytest · Ruff
+Apache Airflow 2.10.5 · PostgreSQL 16 · FastAPI · Streamlit · Docker Compose · pytest · Ruff

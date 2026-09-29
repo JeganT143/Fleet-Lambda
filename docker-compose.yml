@@ -119,6 +119,8 @@ services:
       AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG: 4
       AIRFLOW__SCHEDULER__DAG_DIR_LIST_INTERVAL: 30
       AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: "True"
+      # REST API login with the admin user (used by the dashboard to show/trigger DAG runs)
+      AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session
       LANDING_DIR: /data/landing
       PYTHONPATH: /opt/project
     volumes:
@@ -208,6 +210,37 @@ services:
     volumes:
       - ./fleet:/app/fleet
       - ./data/landing:/data/landing
+
+  dashboard:
+    <<: *runtime
+    profiles: ["app"]
+    command:
+      - streamlit
+      - run
+      - /app/fleet/dashboard/app.py
+      - --server.port=8501
+      - --server.address=0.0.0.0
+      - --server.headless=true
+      - --browser.gatherUsageStats=false
+    environment:
+      API_BASE_URL: http://api:8000
+      AIRFLOW_BASE_URL: http://airflow:8080
+    ports:
+      - "127.0.0.1:8501:8501"
+    mem_limit: 384m
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen("http://localhost:8501/_stcore/health", timeout=5)
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   # ---------------------------------------------------------------- tools (profile "tools")
   runner:

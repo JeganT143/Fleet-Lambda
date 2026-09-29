@@ -10,10 +10,24 @@ make env            # creates .env if missing (edit passwords)
 make reset          # removes this project's containers, volumes and generated landing files
 make build
 make up             # postgres, kafka, airflow -> healthy
-make up-app         # producer, spark-streaming, api, expense-generator
+make up-app         # producer, spark-streaming, api, expense-generator, dashboard
 make ps
 ```
-**Expect:** all services Up. postgres, kafka, airflow and api are `(healthy)`.
+**Expect:** all services Up. postgres, kafka, airflow, api and dashboard are `(healthy)`.
+
+> **Quickest demo: the dashboard at http://localhost:8501.** Every step below has a
+> dashboard page:
+>
+> | Step | Dashboard page |
+> |---|---|
+> | Health and architecture | Overview |
+> | 1–2 (Kafka, streaming) | Live Fleet, Pipeline & Quality (partitions) |
+> | 3–4 (batch, reconciliation) | Daily Report, Vehicles |
+> | 5 (idempotency) | Pipeline & Quality → "Re-run batch for this date" |
+> | 6 (data quality) | Pipeline & Quality |
+> | 7 (alerts) | Alerts |
+>
+> The command-line steps below show the same things from the terminal.
 
 ## 1. Kafka: partitions and keys
 

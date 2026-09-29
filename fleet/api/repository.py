@@ -286,6 +286,115 @@ class FleetRepository:
             {"business_date": business_date},
         )
 
+    # ------------------------------------------------------------------ dashboard views
+    def fleet_windows(self, limit: int) -> list[Row]:
+        """The `limit` most recent fleet windows, newest first."""
+        return self._all(
+            """
+            SELECT window_start, window_end, business_date, vehicles_reporting,
+                   active_vehicles, idle_vehicles, event_count, idle_event_count,
+                   idle_ratio, trips_completed, total_earnings, avg_fare, updated_at
+            FROM realtime_vehicle_metrics
+            ORDER BY window_start DESC
+            LIMIT %(limit)s
+            """,
+            {"limit": limit},
+        )
+
+    def vehicle_states(self) -> list[Row]:
+        """Latest event of every vehicle (uses the (vehicle_id, event_timestamp) index)."""
+        return self._all(
+            """
+            SELECT DISTINCT ON (vehicle_id)
+                   vehicle_id, driver_id, status, latitude, longitude, zone, speed,
+                   event_timestamp, ingestion_ts
+            FROM stream_events
+            ORDER BY vehicle_id, event_timestamp DESC
+            """
+        )
+
+    def report_dates(self) -> list[Row]:
+        """One row per reconciled business date, newest first."""
+        return self._all(
+            """
+            SELECT business_date,
+                   COUNT(*)              AS vehicle_count,
+                   SUM(estimated_profit) AS total_estimated_profit,
+                   COUNT(*) FILTER (WHERE profitability_status = 'profitable')   AS profitable,
+                   COUNT(*) FILTER (WHERE profitability_status = 'watch')        AS watch,
+                   COUNT(*) FILTER (WHERE profitability_status = 'unprofitable') AS unprofitable
+            FROM daily_vehicle_profitability
+            GROUP BY business_date
+            ORDER BY business_date DESC
+            """
+        )
+
+    def pipeline_runs(self, limit: int) -> list[Row]:
+        return self._all(
+            """
+            SELECT run_id, pipeline_name, business_date, status, started_at, finished_at,
+                   rows_read, rows_written, rows_rejected, error_message, airflow_run_id
+            FROM pipeline_runs
+            ORDER BY run_id DESC
+            LIMIT %(limit)s
+            """,
+            {"limit": limit},
+        )
+
+    def stream_quality_totals(self) -> Row:
+        row = self._one(
+            """
+            SELECT COALESCE(SUM(records_total), 0)    AS records_total,
+                   COALESCE(SUM(records_valid), 0)    AS records_valid,
+                   COALESCE(SUM(records_rejected), 0) AS records_rejected
+            FROM data_quality_stats
+            WHERE pipeline_name = 'stream_ingest'
+            """
+        )
+        assert row is not None
+        return row
+
+    def rejected_by_reason(self) -> dict[str, int]:
+        rows = self._all("SELECT reason, COUNT(*) AS n FROM rejected_events GROUP BY reason")
+        return {r["reason"]: int(r["n"]) for r in rows}
+
+    def partition_stats(self) -> list[Row]:
+        return self._all(
+            """
+            SELECT kafka_partition,
+                   COUNT(*)                   AS event_count,
+                   COUNT(DISTINCT vehicle_id) AS vehicle_count
+            FROM stream_events
+            GROUP BY kafka_partition
+            ORDER BY kafka_partition
+            """
+        )
+
+    def recent_rejected(self, limit: int) -> list[Row]:
+        return self._all(
+            """
+            SELECT rejected_id, reason, kafka_partition, kafka_offset, ingestion_ts,
+                   LEFT(raw_value, 200) AS raw_value_preview
+            FROM rejected_events
+            ORDER BY rejected_id DESC
+            LIMIT %(limit)s
+            """,
+            {"limit": limit},
+        )
+
+    def recent_batch_quality(self, limit: int) -> list[Row]:
+        return self._all(
+            """
+            SELECT pipeline_name, batch_ref, business_date, records_total, records_valid,
+                   records_rejected, rule_failures, recorded_at
+            FROM data_quality_stats
+            WHERE pipeline_name <> 'stream_ingest'
+            ORDER BY recorded_at DESC
+            LIMIT %(limit)s
+            """,
+            {"limit": limit},
+        )
+
 
 def get_repository() -> Iterator[FleetRepository]:
     """FastAPI dependency: one repository (and at most one connection) per request.
