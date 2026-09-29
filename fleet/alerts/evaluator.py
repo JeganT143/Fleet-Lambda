@@ -285,8 +285,8 @@ def raise_low_profitability_alerts(
                     alert_type=ALERT_LOW_PROFIT,
                     severity=rules.low_profit_severity(profit, threshold),
                     message=(
-                        f"Vehicle {r['vehicle_id']} estimated profit INR {profit:,.2f} on"
-                        f" {bd.isoformat()} is below INR {threshold:,.2f}"
+                        f"Vehicle {r['vehicle_id']} estimated profit LKR {profit:,.2f} on"
+                        f" {bd.isoformat()} is below LKR {threshold:,.2f}"
                         f" ({r['profitability_status']})"
                     ),
                     dedup_key=key,

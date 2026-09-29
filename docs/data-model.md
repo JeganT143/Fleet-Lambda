@@ -2,14 +2,15 @@
 
 All tables live in the PostgreSQL database `fleet` and are created by
 [`sql/001_schema.sql`](../sql/001_schema.sql) on the first start of an empty volume.
-Money is INR, distance km, speed km/h.
+Money is LKR (Sri Lankan rupees), distance km, speed km/h. Timestamps are stored in
+UTC; business dates are Sri Lankan calendar dates (Asia/Colombo, UTC+05:30).
 
 ## Time columns
 
 | Column | Clock | Set by | Meaning |
 |---|---|---|---|
 | `event_timestamp` | simulated | producer | when the event happened in the simulation |
-| `business_date` | simulated | Spark | UTC date of `event_timestamp` |
+| `business_date` | simulated | Spark | Sri Lankan (Asia/Colombo) date of `event_timestamp` |
 | `ingestion_ts` | real | Kafka | Kafka record timestamp (CreateTime: when the producer sent it) |
 | `processing_ts` | real | Spark | when the streaming job processed the record |
 
@@ -83,7 +84,7 @@ PK `(vehicle_id, business_date)`.
 | `estimated_profit` | `earnings − fuel_cost − maintenance_cost` |
 | `utilization_rate` | `on_trip_event_count / event_count` (0..1) |
 | `service_flag` | from `vehicle_expenses` |
-| `profitability_status` | `profitable` ≥ `PROFITABLE_MIN_PROFIT` (800) > `watch` ≥ `WATCH_MIN_PROFIT` (0) > `unprofitable` |
+| `profitability_status` | `profitable` ≥ `PROFITABLE_MIN_PROFIT` (LKR 2,500) > `watch` ≥ `WATCH_MIN_PROFIT` (0) > `unprofitable` |
 
 ## Operational tables
 

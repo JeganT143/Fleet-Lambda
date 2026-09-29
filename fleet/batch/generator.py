@@ -16,13 +16,14 @@ Cost model per vehicle-day (profiles: fleet/common/fleet_profiles.py):
                    on a service day the car spends part of the day in the workshop (x 0.6)
     fuel_cost    = distance / fuel_km_per_litre x FUEL_PRICE_PER_LITRE x U(0.95, 1.08)
                    (the noise is traffic / driving style)
-    maintenance  = U(150, 350) x maintenance_factor                  routine (tyres, cleaning)
-                   + U(2500, 6000) if service_flag                   workshop visit
+    maintenance  = U(500, 1,100) x maintenance_factor                routine (tyres, cleaning)
+                   + U(8,000, 19,000) if service_flag                workshop visit
     service_flag = random() < service_probability
 
-With stream earnings of ~INR 3,000-5,000 (normal) and ~900-1,800 (low utilisation)
-this gives a mix: normal -> mostly profitable, low utilisation -> watch, high cost
-(6.5 km/l, ~INR 4,000+ fuel) -> unprofitable, maintenance heavy -> watch, and
+All money is LKR (fuel at ~LKR 325/litre). With stream earnings of ~LKR 10,000-16,000
+(normal) and ~3,000-6,000 (low utilisation) this gives a mix: normal -> mostly
+profitable, low utilisation -> watch, high cost (6.5 km/l, ~LKR 13,000+ fuel) ->
+unprofitable, maintenance heavy -> watch, and
 unprofitable on its frequent service days. See the Batch section of the report.
 
 Determinism: every vehicle-day has its own RNG seeded with
@@ -59,8 +60,8 @@ DEMAND_DISTANCE_KM = 220.0  # extra km at demand_factor 1.0
 DISTANCE_NOISE = (0.85, 1.15)
 SERVICE_DAY_DISTANCE_SHARE = 0.6
 FUEL_NOISE = (0.95, 1.08)
-ROUTINE_MAINTENANCE = (150.0, 350.0)
-SERVICE_COST = (2500.0, 6000.0)
+ROUTINE_MAINTENANCE = (500.0, 1_100.0)  # LKR
+SERVICE_COST = (8_000.0, 19_000.0)  # LKR, a workshop visit
 
 
 def expense_row(business_date: date, vid: str, seed: int) -> dict[str, str]:

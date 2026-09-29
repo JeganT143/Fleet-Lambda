@@ -17,7 +17,7 @@ from fleet.common.contracts import (
     STATUS_ON_TRIP,
 )
 from fleet.common.fleet_profiles import LOW_UTILIZATION, NORMAL, profile_for
-from fleet.common.simclock import SimClock
+from fleet.common.simclock import SimClock, business_date_of, local_time
 from fleet.common.zones import CITY_LAT_MAX, CITY_LAT_MIN, CITY_LON_MAX, CITY_LON_MIN
 from fleet.producer import simulator as sim_mod
 from fleet.producer.faults import EXPECTED_REASON, FAULT_KINDS, make_invalid_record
@@ -79,9 +79,14 @@ def test_every_generated_event_is_valid(day_events):
 
 def test_timestamps_are_simulated_time(day_events):
     first = [e for e in day_events if e["vehicle_id"] == "V001"]
-    assert first[0]["timestamp"] == "2026-01-01T00:00:00.000Z"
-    assert first[1]["timestamp"] == "2026-01-01T00:04:48.000Z"  # +288 simulated seconds
-    assert first[-1]["timestamp"].startswith("2026-01-01T23:55:12")
+    # the day starts at 00:00 in Colombo (UTC+05:30) = 18:30 UTC the evening before
+    assert first[0]["timestamp"] == "2025-12-31T18:30:00.000Z"
+    assert first[1]["timestamp"] == "2025-12-31T18:34:48.000Z"  # +288 simulated seconds
+    assert first[-1]["timestamp"].startswith("2026-01-01T18:25:12")  # 23:55:12 in Colombo
+    # one full Sri Lankan business day, no more, no less
+    assert {business_date_of(datetime.fromisoformat(e["timestamp"])) for e in first} == {
+        date(2026, 1, 1)
+    }
 
 
 ALLOWED_TRANSITIONS = {
@@ -148,8 +153,9 @@ def test_fare_only_on_last_on_trip_event(day_events):
     fares = [e["fare"] for e in day_events if e["fare"] > 0]
     trips = {e["trip_id"] for e in day_events if e["fare"] > 0}
     assert len(fares) == len(trips)  # exactly one fare per trip
-    assert min(fares) >= 100 and max(fares) <= 600
-    assert 200 <= statistics.mean(fares) <= 320
+    # LKR: minimum fare 320; a typical trip costs a few hundred to ~1,500 rupees
+    assert min(fares) >= sim_mod.FARE_MINIMUM and max(fares) <= 1920
+    assert 640 <= statistics.mean(fares) <= 1024
 
 
 def test_same_seed_is_deterministic_and_other_seed_differs():
@@ -211,7 +217,7 @@ def test_demand_is_lower_at_night(day_events):
             1
             for e in day_events
             if e["status"] == STATUS_ENROUTE
-            and datetime.fromisoformat(e["timestamp"]).hour in hours
+            and local_time(datetime.fromisoformat(e["timestamp"])).hour in hours  # Colombo
         )
 
     night = trips_in_hours(range(0, 5))
@@ -228,12 +234,13 @@ def test_daily_earnings_by_profile():
             per_vehicle[e["vehicle_id"]] += e["fare"]
         for vid in (f"V{n:03d}" for n in range(1, 21)):
             earnings[profile_for(vid).name].append(per_vehicle[vid])
-    assert 3000 <= statistics.mean(earnings[NORMAL]) <= 5000
-    assert 900 <= statistics.mean(earnings[LOW_UTILIZATION]) <= 1800
+    # LKR per vehicle per day
+    assert 9_600 <= statistics.mean(earnings[NORMAL]) <= 16_000
+    assert 2_880 <= statistics.mean(earnings[LOW_UTILIZATION]) <= 5_760
 
 
 def test_compute_fare():
-    assert compute_fare(10.0, 20.0) == 50 + 150 + 40
+    assert compute_fare(10.0, 20.0) == 160 + 48 * 10 + 6 * 20  # LKR 760
     assert compute_fare(0.1, 1.0) == sim_mod.FARE_MINIMUM
 
 

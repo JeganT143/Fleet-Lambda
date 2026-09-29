@@ -18,7 +18,7 @@ LOW_UTILIZATION = "low_utilization"
 HIGH_COST = "high_cost"
 MAINTENANCE_HEAVY = "maintenance_heavy"
 
-FUEL_PRICE_PER_LITRE = 102.0  # INR
+FUEL_PRICE_PER_LITRE = 325.0  # LKR per litre (approximate Sri Lankan petrol price)
 
 
 @dataclass(frozen=True)
@@ -51,3 +51,59 @@ def profile_for(vehicle_id: str) -> VehicleProfile:
     if last_digit == 9:
         return _PROFILES[MAINTENANCE_HEAVY]
     return _PROFILES[NORMAL]
+
+
+# ---------------------------------------------------------------------------
+# Display identity (Sri Lankan fleet): number plate, car model, driver name.
+# Presentation only - the pipeline keys everything on vehicle_id / driver_id.
+# ---------------------------------------------------------------------------
+_MODELS = {
+    NORMAL: ("Suzuki Wagon R", "Toyota Axio", "Toyota Aqua", "Honda Fit", "Toyota Prius"),
+    LOW_UTILIZATION: ("Suzuki Alto",),
+    HIGH_COST: ("Toyota HiAce van",),  # thirsty van: the high fuel-cost profile
+    MAINTENANCE_HEAVY: ("Toyota Corolla (2004)",),  # old car: frequent workshop visits
+}
+
+# Western Province plates, modern format: "WP" + 3 letters + 4 digits
+_PLATE_PREFIXES = ("CAB", "CAD", "CAF", "CAK", "CAP", "CAR", "CAS", "CAT", "CBA", "CBC")
+
+_DRIVER_NAMES = (
+    "Nimal Perera",
+    "Kasun Fernando",
+    "Tharindu Silva",
+    "Mohamed Rizwan",
+    "Suresh Kumar",
+    "Chaminda Jayasuriya",
+    "Ruwan Wickramasinghe",
+    "Fathima Nuzra",
+    "Pradeep Bandara",
+    "Sanjeewa Rathnayake",
+    "Arun Rajendran",
+    "Dilshan Gunawardena",
+    "Lahiru Kumara",
+    "Mohamed Imran",
+    "Nuwan Dissanayake",
+    "Kavinda Herath",
+    "Priyantha de Silva",
+    "Senthil Nathan",
+    "Asanka Weerasinghe",
+    "Harsha Senanayake",
+)
+
+
+def vehicle_model(vehicle_id: str) -> str:
+    n = _vehicle_number(vehicle_id)
+    models = _MODELS[profile_for(vehicle_id).name]
+    return models[n % len(models)]
+
+
+def registration_plate(vehicle_id: str) -> str:
+    """Deterministic Sri Lankan style plate, e.g. V007 -> 'WP CAR-4127'."""
+    n = _vehicle_number(vehicle_id)
+    prefix = _PLATE_PREFIXES[n % len(_PLATE_PREFIXES)]
+    return f"WP {prefix}-{(n * 7919) % 9000 + 1000}"
+
+
+def driver_name(driver_id: str) -> str:
+    n = int(driver_id.lstrip("D"))
+    return _DRIVER_NAMES[(n - 1) % len(_DRIVER_NAMES)]

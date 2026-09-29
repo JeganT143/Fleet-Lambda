@@ -108,7 +108,7 @@ class FakeRepository:
         self.calls.append(("zone_metrics", business_date))
         return [
             {
-                "zone": "central",
+                "zone": "Battaramulla",
                 "windows": 2,
                 "event_count": 400,
                 "trips_completed": 10,
@@ -116,7 +116,7 @@ class FakeRepository:
                 "avg_fare": Decimal("300.00"),
             },
             {
-                "zone": "north",
+                "zone": "Kelaniya",
                 "windows": 2,
                 "event_count": 100,
                 "trips_completed": 0,
@@ -135,9 +135,9 @@ class FakeRepository:
             "trip_id": "T1",
             "driver_id": "D001",
             "status": "on_trip",
-            "latitude": 12.97,
-            "longitude": 77.59,
-            "zone": "central",
+            "latitude": 6.914,
+            "longitude": 79.877,
+            "zone": "Battaramulla",
             "speed": 32.5,
             "fare": Decimal("0.00"),
             "event_timestamp": T0,
@@ -307,7 +307,7 @@ def test_zones_default_latest_date(client, fake_repo):
     assert body["business_date"] == "2026-01-03"
     assert body["zone_count"] == 2
     assert body["zones"][0] == {
-        "zone": "central",
+        "zone": "Battaramulla",
         "windows": 2,
         "event_count": 400,
         "trips_completed": 10,
@@ -346,8 +346,8 @@ def test_vehicle_happy_path(client, fake_repo):
     assert body["vehicle_id"] == "V001"
     ev = body["latest_event"]
     assert ev["status"] == "on_trip"
-    assert ev["zone"] == "central"
-    assert ev["latitude"] == 12.97
+    assert ev["zone"] == "Battaramulla"
+    assert ev["latitude"] == 6.914
     assert ev["event_id"] == "00000000-0000-0000-0000-000000000001"
     assert body["stream_stats"] == {
         "business_date": "2026-01-03",

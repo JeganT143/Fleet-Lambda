@@ -1,4 +1,9 @@
-"""Geographic zones: a 3x3 grid over the simulated city (Chennai bounding box).
+"""Geographic zones: a 3x3 grid over the simulated city (Colombo, Sri Lanka).
+
+The bounding box covers the land area from Kotahena/Kelaniya in the north to
+Dehiwala/Kottawa in the south, and from the coast at Borella/Dehiwala inland to
+Malabe. Each cell is labelled with a well-known neighbourhood that lies inside it
+(labels are approximate: a cell is a rectangle, not an administrative boundary).
 
 zone_for(lat, lon) is the reference implementation. The Spark streaming job
 builds its column expression from the same constants so both always agree.
@@ -6,19 +11,20 @@ builds its column expression from the same constants so both always agree.
 
 from __future__ import annotations
 
-CITY_LAT_MIN = 12.90
-CITY_LAT_MAX = 13.20
-CITY_LON_MIN = 80.15
-CITY_LON_MAX = 80.30
+CITY_NAME = "Colombo"
+CITY_LAT_MIN = 6.84
+CITY_LAT_MAX = 6.98
+CITY_LON_MIN = 79.86
+CITY_LON_MAX = 79.97
 GRID_SIZE = 3
 
 OUTSIDE_ZONE = "outside"
 
 # ZONE_NAMES[row][col]; row 0 = south (low latitude), col 0 = west (low longitude)
 ZONE_NAMES: tuple[tuple[str, ...], ...] = (
-    ("south-west", "south", "south-east"),
-    ("west", "central", "east"),
-    ("north-west", "north", "north-east"),
+    ("Dehiwala", "Maharagama", "Kottawa"),
+    ("Borella", "Battaramulla", "Malabe"),
+    ("Kotahena", "Kelaniya", "Mulleriyawa"),
 )
 
 ALL_ZONES: tuple[str, ...] = tuple(z for row in ZONE_NAMES for z in row) + (OUTSIDE_ZONE,)

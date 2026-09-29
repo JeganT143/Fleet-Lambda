@@ -34,7 +34,7 @@ log = get_logger("spark-streaming")
 def build_spark(settings: Settings) -> SparkSession:
     spark = (
         SparkSession.builder.appName("fleet-streaming")
-        # business_date = UTC date of the event time
+        # timestamps stay UTC; business_date is derived in Asia/Colombo (transforms.local_date)
         .config("spark.sql.session.timeZone", "UTC")
         .config("spark.sql.shuffle.partitions", str(settings.stream_shuffle_partitions))
         .config("spark.ui.enabled", "false")

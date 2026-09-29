@@ -34,8 +34,8 @@ def _points() -> list[tuple[float, float]]:
     # every combination of edge / just-inside / just-outside values
     points = [(lat, lon) for lat in lats for lon in lons]
     # the literal decimal edges (as a producer would send them) and far-away points
-    points += [(13.0, 80.2), (13.1, 80.25), (12.9, 80.15), (13.2, 80.3), (0.0, 0.0)]
-    points += [(-90.0, -180.0), (90.0, 180.0), (13.05, 79.0), (14.0, 80.2)]
+    points += [(6.84, 79.86), (6.98, 79.97), (6.9, 79.9), (6.93, 79.933), (0.0, 0.0)]
+    points += [(-90.0, -180.0), (90.0, 180.0), (6.93, 79.0), (8.0, 79.9)]
     rng = random.Random(7)
     points += [
         (rng.uniform(CITY_LAT_MIN - 0.05, CITY_LAT_MAX + 0.05),
@@ -64,7 +64,15 @@ def test_spark_zone_expression_matches_zone_for(spark):
 
 def test_known_zones():
     # reference values the Spark test relies on
-    assert zone_for(CITY_LAT_MIN, CITY_LON_MIN) == "south-west"
-    assert zone_for(CITY_LAT_MAX, CITY_LON_MAX) == "north-east"  # upper edge -> last cell
-    assert zone_for(13.05, 80.225) == "central"
-    assert zone_for(CITY_LAT_MIN - 0.001, 80.2) == OUTSIDE_ZONE
+    assert zone_for(CITY_LAT_MIN, CITY_LON_MIN) == "Dehiwala"  # south-west corner
+    assert zone_for(CITY_LAT_MAX, CITY_LON_MAX) == "Mulleriyawa"  # upper edge -> last cell
+    # real neighbourhood coordinates land in their own labelled cell
+    assert zone_for(6.8990, 79.9180) == "Battaramulla"
+    assert zone_for(6.9140, 79.8770) == "Borella"
+    assert zone_for(6.9553, 79.9219) == "Kelaniya"
+    assert zone_for(6.9060, 79.9580) == "Malabe"
+    assert zone_for(6.8480, 79.9270) == "Maharagama"
+    assert zone_for(6.8510, 79.8660) == "Dehiwala"
+    # Colombo Fort (on the coast, west of the grid) is outside
+    assert zone_for(6.9344, 79.8428) == OUTSIDE_ZONE
+    assert zone_for(CITY_LAT_MIN - 0.001, 79.9) == OUTSIDE_ZONE

@@ -13,16 +13,22 @@ Pipeline:
     enriched   --fleet_window_metrics--> realtime_vehicle_metrics rows
                --zone_window_metrics---> realtime_zone_metrics rows
 
-Timestamps: the job runs with spark.sql.session.timeZone=UTC, so to_date() of the
-simulated event time is the UTC business date (AGENTS.md 8.3).
+Timestamps: the job runs with spark.sql.session.timeZone=UTC and keeps every
+timestamp in UTC. The business date is the Sri Lankan calendar date (Asia/Colombo,
+UTC+05:30) of the simulated event time (AGENTS.md 8.3), and windows are aligned to
+Sri Lankan clock hours (see local_date / window_start_time).
 """
 
 from __future__ import annotations
 
+import re
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 from pyspark.sql import Column, DataFrame
 from pyspark.sql import functions as F
 
-from fleet.common.contracts import STATUS_ENROUTE, STATUS_IDLE, STATUS_ON_TRIP
+from fleet.common.contracts import BUSINESS_TIMEZONE, STATUS_ENROUTE, STATUS_IDLE, STATUS_ON_TRIP
 from fleet.common.zones import (
     CITY_LAT_MAX,
     CITY_LAT_MIN,
@@ -45,6 +51,31 @@ from fleet.streaming.validation import spark_parse_json, spark_reasons_column
 # NOTE: changing this value changes the streaming state schema, so the fleet_metrics
 # and zone_metrics checkpoints must be deleted when it is changed.
 APPROX_DISTINCT_RSD = 0.02
+
+_UNIT_SECONDS = {"second": 1, "minute": 60, "hour": 3600, "day": 86400}
+
+
+def local_date(ts: Column | str) -> Column:
+    """Sri Lankan calendar date of a UTC timestamp column (the business date)."""
+    return F.to_date(F.from_utc_timestamp(ts, BUSINESS_TIMEZONE))
+
+
+def window_start_time(window_duration: str) -> str:
+    """`startTime` for F.window so windows begin on Sri Lankan clock boundaries.
+
+    Spark aligns windows to the UTC epoch. Colombo is UTC+05:30, so plain 1-hour
+    windows would run 08:30-09:30 local time. Shifting them by (-offset mod length)
+    makes them run 09:00-10:00 local: 30 minutes for hourly windows, 0 for 15 or 30
+    minute windows, 18h30 for daily windows (= local midnight).
+    """
+    match = re.fullmatch(r"\s*(\d+)\s*(second|minute|hour|day)s?\s*", window_duration)
+    if not match:
+        raise ValueError(f"unsupported window duration: {window_duration!r}")
+    length = int(match.group(1)) * _UNIT_SECONDS[match.group(2)]
+    offset = ZoneInfo(BUSINESS_TIMEZONE).utcoffset(datetime(2026, 1, 1))
+    assert offset is not None
+    return f"{int(-offset.total_seconds()) % length} seconds"
+
 
 # ISO-8601 with an explicit offset. Under a UTC session this renders "...Z", which
 # psycopg passes to PostgreSQL's timestamptz unambiguously.
@@ -123,7 +154,7 @@ def enrich(valid: DataFrame) -> DataFrame:
     )
     return typed.select(
         "*",
-        F.to_date("event_timestamp").alias("business_date"),  # UTC date (session tz = UTC)
+        local_date("event_timestamp").alias("business_date"),  # Sri Lankan date
         zone_column(F.col("latitude"), F.col("longitude")).alias("zone"),
         F.current_timestamp().alias("processing_ts"),  # real: Spark micro-batch time
     )
@@ -239,7 +270,10 @@ def _windowed(events: DataFrame, window_duration: str, watermark_delay: str, *ke
     watermark is a no-op, which is what the unit tests use.
     """
     return events.withWatermark("event_timestamp", watermark_delay).groupBy(
-        F.window("event_timestamp", window_duration).alias("window"), *keys
+        F.window(
+            "event_timestamp", window_duration, startTime=window_start_time(window_duration)
+        ).alias("window"),
+        *keys,
     )
 
 
@@ -247,7 +281,7 @@ def _window_columns() -> list[Column]:
     return [
         F.col("window.start").alias("window_start"),
         F.col("window.end").alias("window_end"),
-        F.to_date("window.start").alias("business_date"),
+        local_date("window.start").alias("business_date"),
     ]
 
 

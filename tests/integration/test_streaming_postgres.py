@@ -25,7 +25,7 @@ QUERY_NAME = "test_ingest"
 DAY = "2099-01-01"
 
 
-def ev(vehicle, status, hhmm, fare=0.0, speed=None, lat=13.05, lon=80.225):
+def ev(vehicle, status, hhmm, fare=0.0, speed=None, lat=6.91, lon=79.915):  # Battaramulla
     if speed is None:
         speed = 0.0 if status == "idle" else 30.0
     return json.dumps(
@@ -39,7 +39,7 @@ def ev(vehicle, status, hhmm, fare=0.0, speed=None, lat=13.05, lon=80.225):
             "speed": speed,
             "status": status,
             "fare": fare,
-            "timestamp": f"{DAY}T{hhmm}:00.000Z",
+            "timestamp": f"{DAY}T{hhmm}:00+05:30",  # Colombo local time
         }
     )
 
@@ -47,8 +47,8 @@ def ev(vehicle, status, hhmm, fare=0.0, speed=None, lat=13.05, lon=80.225):
 VALUES = [
     ev("V901", "idle", "08:05"),
     ev("V901", "enroute", "08:10"),
-    ev("V901", "on_trip", "08:20", fare=320.5, lon=80.29),  # east
-    ev("V902", "idle", "08:30", lat=12.91, lon=80.16),  # south-west
+    ev("V901", "on_trip", "08:20", fare=320.5, lon=79.96),  # Malabe
+    ev("V902", "idle", "08:30", lat=6.85, lon=79.87),  # Dehiwala
     ev("V902", "on_trip", "09:15", fare=180.0),
     ev("V903", "idle", "08:40", speed=-5.0),  # invalid: negative speed
     '{"vehicle_id": "V904", "spe',  # invalid: malformed JSON
@@ -106,10 +106,12 @@ def test_ingest_writer_is_idempotent(settings, kafka_batch, clean_db, pg_conn):
     fare_event = events[2]
     assert fare_event["vehicle_id"] == "V901"
     assert float(fare_event["fare"]) == 320.5
-    assert fare_event["zone"] == "east"
+    assert fare_event["zone"] == "Malabe"
     assert fare_event["status"] == "on_trip"
     assert fare_event["kafka_partition"] == TEST_PARTITION
-    assert fare_event["event_timestamp"].isoformat() == "2099-01-01T08:20:00+00:00"
+    # 08:20 in Colombo is stored as the UTC instant 02:50; the business date is Sri Lankan
+    assert fare_event["event_timestamp"].isoformat() == "2099-01-01T02:50:00+00:00"
+    assert fare_event["business_date"] == date(2099, 1, 1)
     assert fare_event["ingestion_ts"].isoformat() == "2099-01-01T12:00:00+00:00"
     assert fare_event["processing_ts"] is not None
     assert events[0]["trip_id"] is None
@@ -156,8 +158,9 @@ def test_metric_writers_upsert(settings, kafka_batch, clean_db, pg_conn):
     )
     assert len(rows) == 2
     w8 = rows[0]
-    assert w8["window_start"].isoformat() == "2099-01-01T08:00:00+00:00"
-    assert w8["window_end"].isoformat() == "2099-01-01T09:00:00+00:00"
+    # 08:00-09:00 in Colombo = 02:30-03:30 UTC
+    assert w8["window_start"].isoformat() == "2099-01-01T02:30:00+00:00"
+    assert w8["window_end"].isoformat() == "2099-01-01T03:30:00+00:00"
     assert (w8["vehicles_reporting"], w8["active_vehicles"], w8["idle_vehicles"]) == (2, 1, 1)
     assert (w8["event_count"], w8["idle_event_count"]) == (4, 2)
     assert w8["idle_ratio"] == pytest.approx(0.5)
@@ -172,8 +175,9 @@ def test_metric_writers_upsert(settings, kafka_batch, clean_db, pg_conn):
 
     zone_rows = fetch(
         pg_conn,
-        "SELECT to_char(window_start AT TIME ZONE 'UTC', 'HH24:MI') AS w, zone, event_count, "
-        "total_earnings, avg_fare FROM realtime_zone_metrics WHERE business_date = %s",
+        "SELECT to_char(window_start AT TIME ZONE 'Asia/Colombo', 'HH24:MI') AS w, zone, "
+        "event_count, total_earnings, avg_fare FROM realtime_zone_metrics "
+        "WHERE business_date = %s",
         (date(2099, 1, 1),),
     )
     got = {
@@ -185,10 +189,10 @@ def test_metric_writers_upsert(settings, kafka_batch, clean_db, pg_conn):
         for r in zone_rows
     }
     assert got == {
-        ("08:00", "central"): (2, 0.0, None),
-        ("08:00", "east"): (1, 320.5, 320.5),
-        ("08:00", "south-west"): (1, 0.0, None),
-        ("09:00", "central"): (1, 180.0, 180.0),
+        ("08:00", "Battaramulla"): (2, 0.0, None),
+        ("08:00", "Malabe"): (1, 320.5, 320.5),
+        ("08:00", "Dehiwala"): (1, 0.0, None),
+        ("09:00", "Battaramulla"): (1, 180.0, 180.0),
     }
 
 

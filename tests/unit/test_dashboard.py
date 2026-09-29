@@ -24,7 +24,9 @@ from streamlit.testing.v1 import AppTest  # noqa: E402
 import fleet.dashboard.client as dash_client  # noqa: E402
 from fleet.api.main import app as api_app  # noqa: E402
 from fleet.api.repository import get_repository  # noqa: E402
+from fleet.common.fleet_profiles import registration_plate  # noqa: E402
 from fleet.dashboard.client import AirflowClient, ApiClient, ApiError  # noqa: E402
+from tests.unit.test_api import ALERT_ROW  # noqa: E402
 from tests.unit.test_api_views import ViewsFakeRepository  # noqa: E402
 
 APP_FILE = str(Path(__file__).resolve().parents[2] / "fleet" / "dashboard" / "app.py")
@@ -170,7 +172,7 @@ def test_daily_report_shows_summary_from_api(fake_services):
     at = _open("Daily Report")
     metrics = {m.label: m.value for m in at.metric}
     assert metrics["Vehicles"] == "2"
-    assert metrics["Estimated profit"] == "₹2,400"
+    assert metrics["Estimated profit"] == "LKR 2,400"
     assert metrics["Profitable"] == "1"
     assert metrics["Unprofitable"] == "1"
 
@@ -186,6 +188,23 @@ def test_rerun_button_triggers_dag_and_confirms_idempotency(fake_services):
     assert conf == {"business_date": "2026-01-03"}
     assert run_id.startswith("dashboard_rerun_2026-01-03_")
     assert any("idempotent" in s.value for s in at.success)
+
+
+def test_alerts_page_handles_fleet_wide_alerts_without_vehicle(fake_services):
+    repo, _ = fake_services
+    no_data = dict(
+        ALERT_ROW,
+        alert_id=8,
+        alert_type="no_stream_data",
+        severity="critical",
+        vehicle_id=None,
+        message="No stream events ingested for 72 s (threshold 60 s)",
+    )
+    repo.list_alerts = lambda **kwargs: [ALERT_ROW, no_data]
+    at = _open("Alerts")
+    assert not at.exception, at.exception
+    table = at.dataframe[-1].value
+    assert list(table["plate"]) == [registration_plate("V001"), ""]
 
 
 def test_airflow_down_shows_warning_not_crash(fake_services):

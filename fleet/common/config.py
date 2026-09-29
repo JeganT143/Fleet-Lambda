@@ -136,7 +136,7 @@ def load_settings() -> Settings:
         alert_no_data_seconds=_int("ALERT_NO_DATA_SECONDS", 60),
         alert_idle_minutes=_int("ALERT_IDLE_MINUTES", 240),
         alert_min_daily_profit=_float("ALERT_MIN_DAILY_PROFIT", 0.0),
-        profitable_min_profit=_float("PROFITABLE_MIN_PROFIT", 800.0),
+        profitable_min_profit=_float("PROFITABLE_MIN_PROFIT", 2500.0),
         watch_min_profit=_float("WATCH_MIN_PROFIT", 0.0),
         log_level=_env("LOG_LEVEL", "INFO"),
         producer_invalid_event_rate=_float("PRODUCER_INVALID_EVENT_RATE", 0.005),

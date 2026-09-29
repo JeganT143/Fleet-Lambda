@@ -401,6 +401,19 @@ Do not fabricate performance results.
 
 ---
 
+# Phase 15 — Sri Lankan data (added on request)
+
+- [x] City: Colombo grid with neighbourhood zone names.
+- [x] Currency: LKR for fares, fuel, maintenance, thresholds, alerts, dashboard.
+- [x] Business date, rush hours and hourly windows in Sri Lanka time (Asia/Colombo).
+- [x] Sri Lankan number plates, car models and driver names (display only).
+- [x] Tests updated to the new specification (same checks, Sri Lankan values) + new timezone tests.
+- [x] Documentation and ADR-013 updated.
+- [ ] Reset the stack and run on Sri Lankan data (needs user approval: `make reset`).
+- [ ] Re-measure report §18 results on the Sri Lankan data.
+
+---
+
 # Final Acceptance Criteria
 
 The project must demonstrate:

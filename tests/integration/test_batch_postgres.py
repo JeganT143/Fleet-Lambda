@@ -91,7 +91,7 @@ def insert_events(dsn: str) -> None:
                 "INSERT INTO stream_events (event_id, trip_id, driver_id, vehicle_id, latitude,"
                 " longitude, speed, status, fare, event_timestamp, business_date, zone,"
                 " kafka_partition, kafka_offset, ingestion_ts, processing_ts)"
-                " VALUES (%s, NULL, %s, %s, 13.05, 80.225, %s, %s, %s, %s, %s, 'central',"
+                " VALUES (%s, NULL, %s, %s, 6.91, 79.915, %s, %s, %s, %s, %s, 'Battaramulla',"
                 " 9998, 0, '2000-01-01T00:00:00Z', '2000-01-01T00:00:00Z')",
                 (
                     uuid.uuid5(uuid.NAMESPACE_URL, f"batch-it-{vid}-{hhmm}"),

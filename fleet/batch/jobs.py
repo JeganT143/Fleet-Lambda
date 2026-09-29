@@ -49,7 +49,9 @@ JDBC_FETCH_SIZE = 5000
 def build_spark(app_name: str) -> SparkSession:
     spark = (
         SparkSession.builder.appName(app_name)
-        .config("spark.sql.session.timeZone", "UTC")  # business_date = UTC date
+        .config(
+            "spark.sql.session.timeZone", "UTC"
+        )  # timestamps in UTC; dates come from stream_events
         .config("spark.sql.shuffle.partitions", "1")  # ~20 vehicles per day: tiny shuffles
         .config("spark.ui.enabled", "false")
         .getOrCreate()

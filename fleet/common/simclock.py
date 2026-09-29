@@ -3,7 +3,7 @@
 Four timestamps are kept distinct across the project:
 
     event timestamp      simulated time the event happened (set by the producer)
-    business date        UTC calendar date of the event timestamp
+    business date        Sri Lankan calendar date (Asia/Colombo) of the event timestamp
     ingestion timestamp  real time on the Kafka record (CreateTime: set when the producer sends it)
     processing timestamp real time Spark processed the record
 
@@ -17,6 +17,11 @@ import time
 from collections.abc import Callable
 from datetime import UTC, date, datetime, timedelta
 from datetime import time as dtime
+from zoneinfo import ZoneInfo
+
+from fleet.common.contracts import BUSINESS_TIMEZONE
+
+LOCAL_TZ = ZoneInfo(BUSINESS_TIMEZONE)
 
 
 class SimClock:
@@ -28,7 +33,8 @@ class SimClock:
     ) -> None:
         self._real_now = real_now
         self._real_anchor = real_now()
-        self._sim_anchor = datetime.combine(sim_start_date, dtime.min, tzinfo=UTC)
+        # simulated time starts at local midnight (00:00 in Colombo) of the start date
+        self._sim_anchor = datetime.combine(sim_start_date, dtime.min, tzinfo=LOCAL_TZ)
         self.speedup = 86400.0 / sim_day_real_seconds
 
     def now(self) -> datetime:
@@ -43,8 +49,14 @@ class SimClock:
         return real_seconds * self.speedup
 
 
+def local_time(ts: datetime) -> datetime:
+    """The same instant as Sri Lankan wall-clock time."""
+    return ts.astimezone(LOCAL_TZ)
+
+
 def business_date_of(ts: datetime) -> date:
-    return ts.astimezone(UTC).date()
+    """Business date = Sri Lankan calendar date of the (UTC) timestamp."""
+    return local_time(ts).date()
 
 
 def to_iso(ts: datetime) -> str:

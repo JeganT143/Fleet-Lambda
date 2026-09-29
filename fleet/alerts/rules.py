@@ -14,7 +14,7 @@ Severities (documented choice):
                        critical  - idle >= IDLE_CRITICAL_FACTOR x threshold (6 h by default)
     low_profitability  warning   - profit below the threshold
                        critical  - loss deeper than CRITICAL_LOSS_MARGIN below the threshold
-                                   (INR 1,000 by default, e.g. a workshop day)
+                                   (LKR 3,000 by default, e.g. a workshop day)
 
 De-duplication: the alerts table has a UNIQUE dedup_key, and each key names ONE
 occurrence of a condition, so re-evaluating it (every minute, Airflow retries, batch
@@ -35,7 +35,7 @@ WARNING = "warning"
 CRITICAL = "critical"
 
 IDLE_CRITICAL_FACTOR = 3.0
-CRITICAL_LOSS_MARGIN = 1000.0
+CRITICAL_LOSS_MARGIN = 3000.0
 
 
 # ---------------------------------------------------------------------------

@@ -138,7 +138,7 @@ def _seed(conn) -> dict:
                     event_id, trip_id, driver_id, vehicle_id, latitude, longitude, speed,
                     status, fare, event_timestamp, business_date, zone, kafka_partition,
                     kafka_offset, ingestion_ts, processing_ts)
-                VALUES (%s, %s, 'D950', 'V950', 12.95, 77.66, %s, %s, %s, %s, %s, %s,
+                VALUES (%s, %s, 'D950', 'V950', 6.90, 79.95, %s, %s, %s, %s, %s, %s,
                         0, %s, %s, %s)
                 """,
                 (
@@ -265,7 +265,7 @@ def test_vehicle_detail(seeded):
     assert ev["status"] == "on_trip"
     assert ev["zone"] == "test_airport"
     assert ev["speed"] == 42.5
-    assert (ev["latitude"], ev["longitude"]) == (12.95, 77.66)
+    assert (ev["latitude"], ev["longitude"]) == (6.90, 79.95)
     assert ev["event_timestamp"] == "2099-12-28T11:40:00Z"
     assert ev["ingestion_ts"] == "2099-12-28T11:40:01Z"
     assert body["stream_stats"] == {

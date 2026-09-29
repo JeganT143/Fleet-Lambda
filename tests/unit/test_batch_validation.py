@@ -38,7 +38,7 @@ def test_whitespace_and_case_are_tolerated():
         ("V001,nan,230,250,false,2026-01-01", "invalid_number"),
         ("V001,1650,-1,250,false,2026-01-01", "negative_value"),
         ("V001,1650,230,-0.5,false,2026-01-01", "negative_value"),
-        ("V001,100001,230,250,false,2026-01-01", "value_above_max"),
+        ("V001,300001,230,250,false,2026-01-01", "value_above_max"),
         ("V001,1650,230,2000.01,false,2026-01-01", "value_above_max"),
         ("V001,1650,230,250,yes,2026-01-01", "invalid_service_flag"),
         ("V001,1650,230,250,false,2026-02-30", "invalid_business_date"),

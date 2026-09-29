@@ -16,7 +16,7 @@ All settings are environment variables. `make env` copies `.env.example` to `.en
 | Streaming | `STREAM_WINDOW_DURATION`, `STREAM_WATERMARK_DELAY`, `STREAM_TRIGGER_INTERVAL`, `STREAM_MAX_OFFSETS_PER_TRIGGER` |
 | Batch | `LANDING_DIR`, `EXPENSE_POLL_SECONDS`, `STREAM_DISTANCE_MAX_GAP_MINUTES` |
 | Alerts | `ALERT_NO_DATA_SECONDS` (60 real s), `ALERT_IDLE_MINUTES` (240 simulated min), `ALERT_MIN_DAILY_PROFIT` (0) |
-| Profitability | `PROFITABLE_MIN_PROFIT` (800), `WATCH_MIN_PROFIT` (0) |
+| Profitability | `PROFITABLE_MIN_PROFIT` (LKR 2,500), `WATCH_MIN_PROFIT` (0) |
 
 Containers read `.env` when they are created. After changing it, run `docker compose up -d <service>` to recreate the affected service.
 

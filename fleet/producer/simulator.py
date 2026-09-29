@@ -9,8 +9,9 @@ Trip lifecycle of a vehicle (each arrow is one tick):
     idle ... idle -> enroute x (1-3) -> on_trip x (2-6) -> idle ...
                      \\____________ same trip_id ____________/
 
-- A trip starts when an idle vehicle receives a ride request. The chance per tick is
-  BASE_REQUEST_PROBABILITY x hourly demand (lower at night, peaks in rush hours)
+- The city is Colombo, Sri Lanka. A trip starts when an idle vehicle receives a ride
+  request. The chance per tick is BASE_REQUEST_PROBABILITY x hourly demand by
+  Sri Lankan local hour (lower at night, peaks in the Colombo rush hours)
   x the vehicle's profile demand_factor (fleet_profiles.py).
 - `enroute` = driving to the pickup point, `on_trip` = passenger on board.
 - The trip's full fare is reported ONCE, on the last on_trip event; every other
@@ -43,24 +44,24 @@ from fleet.common.contracts import (
     vehicle_id,
 )
 from fleet.common.fleet_profiles import profile_for
-from fleet.common.simclock import to_iso
+from fleet.common.simclock import local_time, to_iso
 from fleet.common.zones import CITY_LAT_MAX, CITY_LAT_MIN, CITY_LON_MAX, CITY_LON_MIN
 
 # ---------------------------------------------------------------------------
-# Tuning constants (tuned so one simulated day gives ~INR 3000-5000 per normal
-# vehicle and ~900-1800 per low-utilisation vehicle; see tests / report)
+# Tuning constants (tuned so one simulated day gives ~LKR 10,000-16,000 per normal
+# vehicle and ~3,000-6,000 per low-utilisation vehicle; see tests / report)
 # ---------------------------------------------------------------------------
 # Ride-request chance per idle tick at hourly demand 1.0 and demand_factor 1.0
 BASE_REQUEST_PROBABILITY = 0.10
 
-# Relative ride demand per simulated hour of day (index = hour, UTC)
+# Relative ride demand per simulated hour of day (index = Sri Lankan local hour)
 HOURLY_DEMAND: tuple[float, ...] = (
     0.15, 0.10, 0.10, 0.10, 0.15, 0.30,  # 00-05 night
-    0.60, 0.90, 1.40, 1.40, 1.00, 0.90,  # 06-11 morning rush 08-09
+    0.60, 0.90, 1.40, 1.40, 1.00, 0.90,  # 06-11 morning office rush 07-09
     1.00, 1.00, 0.90, 0.90, 1.00, 1.50,  # 12-17
     1.60, 1.50, 1.10, 0.90, 0.60, 0.35,  # 18-23 evening rush 17-19
 )  # fmt: skip
-RUSH_HOURS = frozenset({8, 9, 17, 18, 19})
+RUSH_HOURS = frozenset({7, 8, 9, 17, 18, 19})  # Colombo traffic peaks
 RUSH_SPEED_SHARE = 0.6  # in rush hours only the lower 60% of the speed range is used
 
 # Ticks spent in each phase of a trip (inclusive ranges)
@@ -71,16 +72,17 @@ ON_TRIP_TICKS = (2, 6)
 ENROUTE_SPEED_KMH = (15.0, 45.0)
 ON_TRIP_SPEED_KMH = (15.0, 60.0)
 
-# Fare = base + per-km + per-minute (INR), with a minimum fare
-FARE_BASE = 50.0
-FARE_PER_KM = 15.0
-FARE_PER_MINUTE = 2.0
-FARE_MINIMUM = 100.0
+# Fare = base + per-km + per-minute (LKR), with a minimum fare. Illustrative
+# ride-hailing tariff, not an actual Colombo operator's price list.
+FARE_BASE = 160.0
+FARE_PER_KM = 48.0
+FARE_PER_MINUTE = 6.0
+FARE_MINIMUM = 320.0
 
 # Pickups are near the vehicle: offset of up to this many degrees (~3 km)
 PICKUP_RADIUS_DEG = 0.03
 
-# Flat-earth conversion, good enough inside one city (Chennai ~13 deg N)
+# Flat-earth conversion, good enough inside one city (Colombo ~7 deg N)
 KM_PER_DEG_LAT = 111.0
 KM_PER_DEG_LON = 111.0 * math.cos(math.radians((CITY_LAT_MIN + CITY_LAT_MAX) / 2))
 
@@ -92,7 +94,7 @@ class Clock(Protocol):
 
 
 def compute_fare(distance_km: float, duration_minutes: float) -> float:
-    """Trip fare in INR: base + per-km + per-minute, never below the minimum fare."""
+    """Trip fare in LKR: base + per-km + per-minute, never below the minimum fare."""
     fare = FARE_BASE + FARE_PER_KM * distance_km + FARE_PER_MINUTE * duration_minutes
     return round(max(fare, FARE_MINIMUM), 2)
 
@@ -158,7 +160,8 @@ class TelemetrySimulator:
         """Advance every vehicle by one tick and return one event per vehicle."""
         now = self.clock.now()
         timestamp = to_iso(now)
-        return [self._step(v, now.hour, timestamp) for v in self.vehicles]
+        hour = local_time(now).hour  # demand and traffic follow Colombo local time
+        return [self._step(v, hour, timestamp) for v in self.vehicles]
 
     # ------------------------------------------------------------------ internals
     def _new_id(self) -> str:

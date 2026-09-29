@@ -42,7 +42,8 @@ infrastructure is scaled out; only configuration does.
 on business dates.
 
 **Decision.** Only the producer has a clock (`SimClock`, speed-up 288×). Event
-timestamps carry simulated time; `business_date` is the UTC date of the event timestamp.
+timestamps carry simulated time (in UTC); `business_date` is the Sri Lankan calendar date
+(Asia/Colombo) of the event timestamp (see ADR-013).
 Other components derive simulated time from data, never from their own wall clock.
 Ingestion (Kafka) and processing (Spark) timestamps stay in real time.
 
@@ -167,3 +168,26 @@ charts and operations views. The dashboard adds no business logic.
 **Consequences.** One more container (≈ 384 MB limit). The UI stays a thin presentation
 layer: if it were replaced, nothing else would change. Airflow's REST API now accepts basic
 auth, which is acceptable for a local demo; production would use a service account and TLS.
+
+---
+
+## ADR-013 — Sri Lankan locale (Colombo, LKR, Asia/Colombo business day)
+
+**Context.** The project simulates a Sri Lankan ride-hailing fleet end to end.
+
+**Decision.**
+- City grid over Colombo with neighbourhood labels (`fleet/common/zones.py`).
+- All money in LKR: fares `160 + 48/km + 6/min` (minimum 320), fuel ≈ LKR 325/litre,
+  routine maintenance LKR 500–1,100, workshop visits LKR 8,000–19,000, "profitable" from
+  LKR 2,500 profit. Every value is the earlier model scaled by the same factor (×3.2), so the
+  profit mix stays realistic. The tariff is illustrative, not a real operator's price list.
+- Business date = Sri Lankan calendar date (`BUSINESS_TIMEZONE = "Asia/Colombo"` in
+  `contracts.py`). Timestamps stay UTC on the wire and in the database; only the date and
+  the display are local. Hourly windows are aligned to Colombo clock hours
+  (`transforms.window_start_time`).
+- Number plates (WP CAx-1234), car models and driver names are display-only attributes
+  derived from the vehicle id (`fleet_profiles.py`); the pipeline keys stay `V###`/`D###`.
+
+**Consequences.** Data produced before this change (INR, UTC business dates) is not
+comparable, so the stack must be reset (`make reset`) once. Sri Lanka has no daylight saving,
+so the fixed 30-minute window shift is exact.

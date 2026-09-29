@@ -113,11 +113,20 @@ Celery/Redis for Airflow, Kafka UI. The target machine has ~7 GB RAM; Spark runs
 `1 simulated day = 300 real seconds` → speed-up factor **288**. The producer owns the
 only `SimClock` (`fleet/common/simclock.py`); every other component derives simulated
 time from event timestamps in the data. Four timestamps are kept separate:
-`event_timestamp` (simulated), `business_date` (UTC date of event timestamp),
+`event_timestamp` (simulated, stored in UTC), `business_date` (**Sri Lankan** calendar date,
+Asia/Colombo UTC+05:30, of the event timestamp),
 `ingestion_ts` (Kafka record time, real), `processing_ts` (Spark, real).
 
 With `STREAM_INTERVAL_SECONDS=1` each vehicle emits one event per real second =
 one event every **4.8 simulated minutes**, i.e. **300 events per vehicle per day**.
+
+### 5.1a Locale: Colombo, Sri Lanka
+The fleet operates in Colombo. Positions fall in a 3×3 grid over the city (lat 6.84–6.98,
+lon 79.86–79.97) whose cells carry neighbourhood labels (Kotahena, Kelaniya, Mulleriyawa /
+Borella, Battaramulla, Malabe / Dehiwala, Maharagama, Kottawa). Money is **LKR**. The
+business day, rush hours and the 1-hour metric windows follow **Sri Lankan local time**:
+Spark windows are shifted by 30 minutes so they run 08:00–09:00 Colombo time rather than
+08:30–09:30. Timestamps stay in UTC everywhere they are stored or transmitted.
 
 ### 5.2 Event semantics
 See `fleet/common/contracts.py`. A trip's total fare is reported **once**, on the last

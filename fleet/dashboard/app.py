@@ -23,7 +23,9 @@ import pandas as pd
 import streamlit as st
 
 from fleet.common.config import load_settings
-from fleet.common.fleet_profiles import profile_for
+from fleet.common.contracts import BUSINESS_TIMEZONE, CURRENCY
+from fleet.common.fleet_profiles import driver_name, profile_for, registration_plate, vehicle_model
+from fleet.common.zones import CITY_NAME
 from fleet.dashboard.client import (
     DAILY_BATCH_DAG,
     STREAM_ALERTS_DAG,
@@ -64,15 +66,25 @@ def api_get(path: str, **params):
         st.stop()
 
 
-def inr(value: float | None) -> str:
-    return "–" if value is None else f"₹{value:,.0f}"
+def money(value: float | None) -> str:
+    return "–" if value is None else f"{CURRENCY} {value:,.0f}"
 
 
 def ts(value: str | None) -> str:
-    """ISO timestamp -> 'YYYY-MM-DD HH:MM:SS' (UTC)."""
+    """ISO timestamp (UTC) -> 'YYYY-MM-DD HH:MM:SS' in Sri Lanka time."""
     if not value:
         return "–"
-    return pd.Timestamp(value).tz_convert("UTC").strftime("%Y-%m-%d %H:%M:%S")
+    return pd.Timestamp(value).tz_convert(BUSINESS_TIMEZONE).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def with_identity(df: pd.DataFrame) -> pd.DataFrame:
+    """Add number plate, car model and profile next to vehicle_id (display only)."""
+    df = df.copy()
+    at = df.columns.get_loc("vehicle_id") + 1
+    df.insert(at, "plate", df["vehicle_id"].map(registration_plate))
+    df.insert(at + 1, "model", df["vehicle_id"].map(vehicle_model))
+    df.insert(at + 2, "profile", df["vehicle_id"].map(lambda v: profile_for(v).name))
+    return df
 
 
 def seconds_ago(value: str | None) -> float | None:
@@ -101,10 +113,11 @@ def status_chart(df: pd.DataFrame, x: str, y: str, color_field: str, colors: dic
 
 # ============================================================================ pages
 def page_overview() -> None:
-    st.title("Fleet Lambda: ride-hailing operations")
+    st.title(f"Fleet Lambda: ride-hailing operations in {CITY_NAME}, Sri Lanka")
     st.caption(
         "Lambda architecture demo: live telemetry (speed layer) + daily expense files "
         "(batch layer), reconciled into a per-vehicle profitability report. "
+        f"Money in {CURRENCY}, times in Sri Lanka time (UTC+05:30). "
         "1 simulated business day = 5 real minutes."
     )
 
@@ -140,7 +153,7 @@ def page_overview() -> None:
     # --- simulated clock ------------------------------------------------------------
     st.subheader("Simulated clock")
     c1, c2, c3 = st.columns(3)
-    c1.metric("Simulated time (latest event)", ts(summary["last_event_timestamp"]))
+    c1.metric("Simulated time in Colombo (latest event)", ts(summary["last_event_timestamp"]))
     totals = summary["business_day_totals"] or {}
     c2.metric("Current business date", totals.get("business_date", "–"))
     reports = api_get("/api/v1/reports/daily")["reports"]
@@ -212,7 +225,8 @@ def page_live_fleet() -> None:
         day = summary["business_day_totals"]
         st.markdown(
             f"**Latest window:** {ts(w['window_start'])} → {ts(w['window_end'])} "
-            f"(business date {w['business_date']}, updated {ts(w['updated_at'])} UTC)"
+            f"(business date {w['business_date']}, Sri Lanka time; "
+            f"updated {ts(w['updated_at'])})"
         )
         c = st.columns(6)
         c[0].metric("Vehicles reporting", w["vehicles_reporting"])
@@ -220,12 +234,12 @@ def page_live_fleet() -> None:
         c[2].metric("Idle vehicles", w["idle_vehicles"])
         c[3].metric("Idle ratio", f"{w['idle_ratio']:.0%}")
         c[4].metric("Trips / hour", f"{w['trips_per_hour']:.0f}")
-        c[5].metric("Earnings (window)", inr(w["total_earnings"]))
+        c[5].metric("Earnings (window)", money(w["total_earnings"]))
         c = st.columns(4)
         c[0].metric("Events / hour", f"{w['events_per_hour']:.0f}")
-        c[1].metric("Avg fare (window)", inr(w["avg_fare"]))
+        c[1].metric("Avg fare (window)", money(w["avg_fare"]))
         c[2].metric(f"Trips today ({day['business_date']})", day["trips_completed"])
-        c[3].metric("Earnings today", inr(day["total_earnings"]))
+        c[3].metric("Earnings today", money(day["total_earnings"]))
 
         left, right = st.columns([3, 2])
         with left:
@@ -252,8 +266,8 @@ def page_live_fleet() -> None:
                     zdf[["zone", "trips_completed", "total_earnings", "avg_fare"]],
                     hide_index=True,
                     column_config={
-                        "total_earnings": st.column_config.NumberColumn(format="₹%.0f"),
-                        "avg_fare": st.column_config.NumberColumn(format="₹%.0f"),
+                        "total_earnings": st.column_config.NumberColumn(format="LKR %.0f"),
+                        "avg_fare": st.column_config.NumberColumn(format="LKR %.0f"),
                     },
                 )
 
@@ -266,7 +280,7 @@ def page_live_fleet() -> None:
             st.caption("Active vs idle vehicles per window")
             st.line_chart(wdf, x="window_start", y=["active_vehicles", "idle_vehicles"])
         with c2:
-            st.caption("Earnings per window (₹)")
+            st.caption(f"Earnings per window ({CURRENCY})")
             st.bar_chart(wdf, x="window_start", y="total_earnings")
         c1, c2 = st.columns(2)
         with c1:
@@ -303,7 +317,11 @@ def page_vehicles() -> None:
     vehicle_id = st.selectbox(
         "Vehicle",
         ids,
-        format_func=lambda v: f"{v}  ({profile_for(v).name.replace('_', ' ')} profile)",
+        format_func=lambda v: f"{v} · {registration_plate(v)} · {vehicle_model(v)}",
+    )
+    st.caption(
+        f"Number plate **{registration_plate(vehicle_id)}** · {vehicle_model(vehicle_id)} · "
+        f"profile **{profile_for(vehicle_id).name.replace('_', ' ')}**"
     )
     data = api_get(f"/api/v1/vehicles/{vehicle_id}")
     ev, stats = data["latest_event"], data["stream_stats"]
@@ -314,13 +332,13 @@ def page_vehicles() -> None:
         c[0].metric("Status", ev["status"])
         c[1].metric("Zone", ev["zone"])
         c[2].metric("Speed", f"{ev['speed']:.0f} km/h")
-        c[3].metric("Driver", ev["driver_id"])
-        c[4].metric("Last event (simulated)", ts(ev["event_timestamp"])[11:])
+        c[3].metric("Driver", driver_name(ev["driver_id"]))
+        c[4].metric("Last event (Colombo time)", ts(ev["event_timestamp"])[11:])
     if stats:
         c = st.columns(3)
         c[0].metric(f"Events on {stats['business_date']}", stats["event_count"])
         c[1].metric("Trips so far", stats["trips_completed"])
-        c[2].metric("Earnings so far", inr(stats["earnings"]))
+        c[2].metric("Earnings so far", money(stats["earnings"]))
 
     st.subheader("Last 7 days (batch layer)")
     daily = data["daily_profitability"]
@@ -363,7 +381,7 @@ def page_vehicles() -> None:
 
 
 def _money_columns() -> dict:
-    fmt = st.column_config.NumberColumn(format="₹%.0f")
+    fmt = st.column_config.NumberColumn(format="LKR %.0f")
     return {
         c: fmt
         for c in (
@@ -404,16 +422,15 @@ def page_daily_report() -> None:
     c = st.columns(5)
     c[0].metric("Vehicles", s["vehicle_count"])
     c[1].metric("Trips", s["total_trips"])
-    c[2].metric("Earnings", inr(s["total_earnings"]))
-    c[3].metric("Operating cost", inr(s["total_operating_cost"]))
-    c[4].metric("Estimated profit", inr(s["total_estimated_profit"]))
+    c[2].metric("Earnings", money(s["total_earnings"]))
+    c[3].metric("Operating cost", money(s["total_operating_cost"]))
+    c[4].metric("Estimated profit", money(s["total_estimated_profit"]))
     c = st.columns(4)
     c[0].metric("Avg utilisation", f"{s['avg_utilization_rate']:.1%}")
     for i, status in enumerate(PROFIT_COLORS, start=1):
         c[i].metric(status.capitalize(), s["status_counts"].get(status, 0))
 
-    vdf = pd.DataFrame(report["vehicles"])
-    vdf["profile"] = vdf["vehicle_id"].map(lambda v: profile_for(v).name)
+    vdf = with_identity(pd.DataFrame(report["vehicles"]))
 
     st.subheader("Estimated profit per vehicle")
     st.altair_chart(
@@ -429,6 +446,8 @@ def page_daily_report() -> None:
         vdf[
             [
                 "vehicle_id",
+                "plate",
+                "model",
                 "profile",
                 "trips",
                 "earnings",
@@ -485,8 +504,9 @@ status               = profitable   if profit ≥ {settings.profitable_min_profi
                        watch        if profit ≥ {settings.watch_min_profit:,.0f}
                        unprofitable otherwise
 ```
-Vehicle profiles (shared by both simulators): V003/V013 low utilisation, V006/V016 high
-fuel cost, V009/V019 maintenance heavy, the rest normal.
+Vehicle profiles (shared by both simulators): V003/V013 low utilisation (Suzuki Alto),
+V006/V016 high fuel cost (Toyota HiAce vans), V009/V019 maintenance heavy (old Corollas),
+the rest normal. All amounts in {CURRENCY}.
             """
         )
 
@@ -495,7 +515,7 @@ fuel cost, V009/V019 maintenance heavy, the rest normal.
         st.caption(
             f"Latest pipeline run: {RUN_ICONS.get(run['status'], '')} **{run['pipeline_name']}** "
             f"#{run['run_id']}, {run['status']}, rows read {run['rows_read']}, "
-            f"written {run['rows_written']}, finished {ts(run['finished_at'])} UTC"
+            f"written {run['rows_written']}, finished {ts(run['finished_at'])}"
         )
 
 
@@ -514,7 +534,7 @@ def page_alerts() -> None:
         ),
         (
             "low_profitability",
-            f"daily profit below ₹{settings.alert_min_daily_profit:,.0f}",
+            f"daily profit below {money(settings.alert_min_daily_profit)}",
             f"{DAILY_BATCH_DAG} (after reconciliation)",
         ),
     ]
@@ -560,6 +580,12 @@ Alerts resolve automatically when the condition clears. To demo `no_stream_data`
         )
     )
     alerts.insert(0, "", alerts["severity"].map(SEVERITY_ICONS))
+    alerts.insert(
+        alerts.columns.get_loc("vehicle_id") + 1,
+        "plate",
+        # fleet-wide alerts (no_stream_data) have no vehicle: pandas gives NaN there
+        alerts["vehicle_id"].map(lambda v: registration_plate(v) if isinstance(v, str) else ""),
+    )
     alerts["created_at"] = alerts["created_at"].map(ts)
     alerts["resolved_at"] = alerts["resolved_at"].map(ts)
     st.dataframe(
@@ -570,6 +596,7 @@ Alerts resolve automatically when the condition clears. To demo `no_stream_data`
                 "alert_type",
                 "severity",
                 "vehicle_id",
+                "plate",
                 "business_date",
                 "message",
                 "status",
@@ -761,6 +788,7 @@ def main() -> None:
     page = st.sidebar.radio("Page", PAGES, label_visibility="collapsed")
     st.sidebar.divider()
     st.sidebar.caption(
+        f"{CITY_NAME}, Sri Lanka · {CURRENCY} · Sri Lanka time\n\n"
         f"Fleet of {settings.fleet_size} vehicles · 1 simulated day = "
         f"{settings.sim_day_real_seconds / 60:.0f} real minutes"
     )

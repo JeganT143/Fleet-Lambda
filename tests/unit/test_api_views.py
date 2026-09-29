@@ -29,9 +29,9 @@ class ViewsFakeRepository(FakeRepository):
             return []
         base = {
             "driver_id": "D001",
-            "latitude": 13.05,
-            "longitude": 80.22,
-            "zone": "central",
+            "latitude": 6.91,
+            "longitude": 79.915,
+            "zone": "Battaramulla",
             "speed": 30.0,
             "event_timestamp": T0,
             "ingestion_ts": T0,

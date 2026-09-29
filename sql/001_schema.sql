@@ -4,10 +4,11 @@
 --
 -- Time columns:
 --   event_timestamp  simulated event time (from the producer)
---   business_date    UTC date of event_timestamp (simulated)
+--   business_date    Sri Lankan (Asia/Colombo) date of event_timestamp (simulated)
 --   ingestion_ts     real time Kafka received the record
 --   processing_ts    real time Spark processed the record
--- Money columns are INR, distances are km, speeds km/h.
+-- Money columns are LKR (Sri Lankan rupees), distances are km, speeds km/h.
+-- Timestamps are stored in UTC.
 
 -- ---------------------------------------------------------------------------
 -- Speed layer: raw validated events (also the history the batch layer reconciles)

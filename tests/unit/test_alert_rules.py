@@ -31,8 +31,8 @@ def test_low_profit_threshold_is_strictly_below():
 
 def test_low_profit_severity():
     assert rules.low_profit_severity(-1, 0) == "warning"
-    assert rules.low_profit_severity(-1000, 0) == "warning"
-    assert rules.low_profit_severity(-1000.01, 0) == "critical"
+    assert rules.low_profit_severity(-3000, 0) == "warning"  # LKR 3,000 margin
+    assert rules.low_profit_severity(-3000.01, 0) == "critical"
 
 
 def test_dedup_keys_are_stable_per_occurrence():

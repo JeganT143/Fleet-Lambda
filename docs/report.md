@@ -1,7 +1,7 @@
 # Technical Report — Ride-Hailing Fleet Operations on a Lambda Architecture
 
 ## 1. Problem definition
-A ride-hailing operator runs a fleet of vehicles. Telemetry (position, speed, status,
+A ride-hailing operator in **Colombo, Sri Lanka** runs a fleet of 20 cars and vans. Telemetry (position, speed, status,
 fares) streams continuously from every vehicle. Operating costs (fuel, maintenance,
 odometer distance, service visits) come once a day as a file from a separate expense
 system. Today the two are never combined, so the operator cannot see whether a vehicle
@@ -103,7 +103,7 @@ stream_distance_km   = Σ speed_kmh × hours since previous event of the vehicle
                        (LAG window; gaps > 30 simulated minutes ignored)
 total_operating_cost = fuel_cost + maintenance_cost
 estimated_profit     = earnings − fuel_cost − maintenance_cost
-status               = profitable   if profit ≥ 800
+status               = profitable   if profit ≥ LKR 2,500
                        watch        if profit ≥ 0
                        unprofitable otherwise                      (thresholds configurable)
 ```
@@ -211,11 +211,17 @@ business logic and never touches the database directly.
 
 ## 17. Simulated time
 - 1 simulated day = 300 real seconds, a speed-up of 288×.
+- A business day is a Sri Lankan calendar day (Asia/Colombo, UTC+05:30); the simulation starts at 00:00 Colombo time. Stored timestamps are UTC.
 - With a 1-second tick, each vehicle emits one event every 4.8 simulated minutes, which is 300 events per vehicle per day and 6,000 per day for 20 vehicles.
 - Only the producer owns a clock. Everyone else derives time from the event timestamps (ADR-003).
 - Real-time checks (no-data alert) use real ingestion time. Simulated-time checks (idle alert) compare against the latest fleet event time.
 
 ## 18. Results (measured on the development machine, 2026-09-29)
+> **Note:** these figures were measured *before* the switch to Colombo / LKR / Sri Lankan
+> business dates. The money and zone rows below are in INR with the old zone names, and will
+> be re-measured on the Sri Lankan data. Row counts, latency and job durations do not depend
+> on the locale.
+
 These figures come from one run of about 1 hour of real time, covering about 9 simulated
 days. They are observations, not benchmarks.
 

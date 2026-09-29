@@ -1,6 +1,7 @@
 # Fleet Lambda: Ride-Hailing Fleet Operations Pipeline
 
-A small, end-to-end **Lambda architecture** data pipeline for a simulated ride-hailing fleet.
+A small, end-to-end **Lambda architecture** data pipeline for a simulated ride-hailing fleet
+in **Colombo, Sri Lanka** (money in LKR, business days in Sri Lanka time).
 It answers one question: *which vehicles are under-utilised or unprofitable, and where and
 when is the fleet earning money?*
 

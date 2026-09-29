@@ -53,8 +53,8 @@ def db(settings):
                 "INSERT INTO stream_events (event_id, trip_id, driver_id, vehicle_id, latitude,"
                 " longitude, speed, status, fare, event_timestamp, business_date, zone,"
                 " kafka_partition, kafka_offset, ingestion_ts, processing_ts)"
-                " VALUES (%s, NULL, 'D961', 'V961', 13.05, 80.225, 0, 'idle', 0, %s, %s,"
-                " 'central', 9997, 0, '2000-01-01T00:00:00Z', '2000-01-01T00:00:00Z')",
+                " VALUES (%s, NULL, 'D961', 'V961', 6.91, 79.915, 0, 'idle', 0, %s, %s,"
+                " 'Battaramulla', 9997, 0, '2000-01-01T00:00:00Z', '2000-01-01T00:00:00Z')",
                 (uuid.uuid5(uuid.NAMESPACE_URL, f"dates-it-{d}"), f"{d}T12:00:00Z", d),
             )
         # D1 was already reconciled successfully; D2 only has a FAILED run

@@ -8,6 +8,15 @@ all import these constants instead of redefining them.
 from __future__ import annotations
 
 # ---------------------------------------------------------------------------
+# Locale: the fleet operates in Colombo, Sri Lanka
+# ---------------------------------------------------------------------------
+# A business day is a Sri Lankan calendar day. Timestamps on the wire and in the
+# database stay in UTC; business_date is the date in this time zone
+# (Sri Lanka Standard Time, UTC+05:30, no daylight saving).
+BUSINESS_TIMEZONE = "Asia/Colombo"
+CURRENCY = "LKR"  # all money values (fares, costs, profit) are Sri Lankan rupees
+
+# ---------------------------------------------------------------------------
 # 8.1 Streaming event contract (Kafka topic `vehicle.telemetry`, JSON value,
 #     message key = vehicle_id)
 # ---------------------------------------------------------------------------
@@ -20,7 +29,7 @@ EVENT_FIELDS: tuple[str, ...] = (
     "longitude",  # float, degrees
     "speed",  # float, km/h
     "status",  # one of VALID_STATUSES
-    "fare",  # float, INR; > 0 only on the final on_trip event of a trip
+    "fare",  # float, LKR; > 0 only on the final on_trip event of a trip
     "timestamp",  # ISO-8601 UTC string, SIMULATED event time
 )
 
@@ -45,7 +54,7 @@ DRIVER_ID_PATTERN = r"^D[0-9]{3}$"
 LATITUDE_RANGE = (-90.0, 90.0)
 LONGITUDE_RANGE = (-180.0, 180.0)
 MAX_SPEED_KMH = 200.0
-MAX_FARE = 10_000.0
+MAX_FARE = 30_000.0
 
 
 def vehicle_id(n: int) -> str:
@@ -63,15 +72,15 @@ def driver_id(n: int) -> str:
 # ---------------------------------------------------------------------------
 EXPENSE_FIELDS: tuple[str, ...] = (
     "vehicle_id",
-    "fuel_cost",  # INR, >= 0
-    "maintenance_cost",  # INR, >= 0
+    "fuel_cost",  # LKR, >= 0
+    "maintenance_cost",  # LKR, >= 0
     "distance_covered",  # km (odometer), >= 0
     "service_flag",  # "true" / "false": vehicle was serviced that day
     "business_date",  # YYYY-MM-DD, must equal the directory date
 )
 
 EXPENSE_FILE_NAME = "vehicle_expenses.csv"
-MAX_DAILY_COST = 100_000.0
+MAX_DAILY_COST = 300_000.0
 MAX_DAILY_DISTANCE_KM = 2_000.0
 
 
