@@ -64,9 +64,6 @@ docs/             documentation (below)
 | [docs/decisions.md](docs/decisions.md) | Architecture decision records |
 | [docs/data-model.md](docs/data-model.md) | Tables, keys, metric definitions |
 | [docs/operations.md](docs/operations.md) | Configuration, commands, monitoring, failure runbook |
-| [docs/report.md](docs/report.md) | Full technical report, including measured results and limitations |
-| [docs/demo-runbook.md](docs/demo-runbook.md) | Step-by-step reproducible demo |
-| [docs/rubric-mapping.md](docs/rubric-mapping.md) | Acceptance criteria → implementation → evidence |
 
 ## Stack
 Python 3.11 · Apache Kafka 3.6 (Confluent 7.6 image, KRaft) · Apache Spark 3.5.4 (Structured Streaming + batch) ·
